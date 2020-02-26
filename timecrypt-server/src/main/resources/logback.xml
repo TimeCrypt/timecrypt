@@ -1,0 +1,32 @@
+<!--
+  ~ Copyright (c) 2020. by ETH Zurich, see AUTHORS file for more
+  ~ Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
+  -->
+
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- encoders are assigned the type
+             ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>benchlog.csv</file>
+        <append>true</append>
+        <immediateFlush>false</immediateFlush>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS},%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="ch.ethz.dsg.timecrypt.benchmarks">
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <root level="info">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

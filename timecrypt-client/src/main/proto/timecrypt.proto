@@ -1,0 +1,157 @@
+/*
+ * Copyright (c) ETH Zurich 2020.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ *
+ */
+syntax = "proto3";
+
+package ch.ethz.dsg.timecrypt.protocol;
+
+option java_package = "ch.ethz.dsg.timecrypt.protocol";
+option java_multiple_files = true;
+option java_outer_classname = "TimeCryptProtocol";
+
+// import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
+
+/*
+ *  Functions in paper:
+ *  (1) CreateStream(uuid, [config])
+ *      Create a new stream, config defines parameters, e.g., chunk interval, operators.
+ *  (2) DeleteStream(uuid)
+ *      Delete specified stream with all associated data.
+ *  (3) RollupStream(uuid, res, [T_s , T_e ])
+ *      Rollup an existing stream or a segment of it to the specified resolution.
+ *  (4) InsertRecord(uuid, [t, val])
+ *      Serialize data points in a chunk and append to the end of the stream.
+ *  (5) GetRange(uuid, T_s , T_e )
+ *      Retrieve all data records within the specified time interval.
+ *  (6) GetStatRange([uuid], T_s , T_e , resolution, [operators])
+ *      Retrieve statistics for the given time interval and resolution, default [sum, count, mean, var, freq].
+ *  (7) DeleteRange(uuid, start, end)
+ *      Delete specified segment of the stream, while maintaining per-chunk digest.
+ *  (8) GrantViewAccess(viewid, [princ-id])
+ *      Grant access to an existing View.
+ *  (9) CreateView(viewid, [policy])
+ *      Create a View with the given policy in JSON format.
+ *  (10) CheckView(viewid, princ-id)
+ *       Retrieve a View token.
+ */
+
+service Timecrypt {
+    rpc createStream (streamMessage) returns (streamId);
+    rpc deleteStream (streamId) returns (google.rpc.Status);
+    rpc insertChunk (chunk) returns (chunkId);
+    rpc getLastWrittenChunk (Empty) returns (chunkId);
+    rpc getRawData (chunkRequestMessage) returns (chunkResponseMessage);
+    rpc getStatisticalData (statisticRequestMessage) returns (statisticResponseMessage);
+    // statistics may only request subset of metadata
+}
+
+enum EncryptionSchema {
+    PLAIN = 0;
+    LONG = 1;
+    LONG_MAC = 2;
+    BIG_INT = 3;
+}
+
+message Empty {
+}
+
+message metadataConfig {
+    // number inside the metadata
+    int32 id = 1;
+    EncryptionSchema schema = 2;
+}
+
+message streamMessage {
+    string ownerID = 1;
+    repeated metadataConfig metadataConfig = 2;
+}
+
+message streamId {
+    string streamId = 1;
+}
+
+message longPayload {
+    int64 encryptedLong = 1;
+}
+
+message longMacPayload {
+    int64 encryptedLong = 1;
+    bytes authCode = 2;
+}
+
+message bigIntPayload {
+    bytes encryptedBigInt = 1;
+}
+
+message bigIntMacPayload {
+    bytes encryptedBigInt = 1;
+    bytes authCode = 2;
+}
+
+message metadataContent {
+    metadataConfig config = 1;
+    // Model the stuff as useful aggregation object - according to metadata config (long, long MAC)
+    oneof payload {
+        longPayload long_payload = 2;
+        longMacPayload long_mac_payload = 3;
+        bigIntPayload big_int_payload = 4;
+        bigIntMacPayload big_int_mac_payload = 5;
+    }
+}
+
+message digest {
+    chunkId start = 1;
+    chunkId end = 2;
+    repeated metadataContent metadataContent = 3;
+
+}
+
+message chunk {
+    chunkId chunkId = 1;
+    streamId streamId = 2;
+    bytes chunk_content = 3;
+    digest metadata = 4;
+}
+
+message chunkId {
+    int64 id = 1;
+}
+
+// Requests all chunk - from startChunkId to endChunkId (inclusive the starting and ending chunks)
+// Granularity is the number of chunks that will be added up to return - the granularity level should be a divider of
+// the intervall (start - end) that is selected
+// end is exclusive of the chunk
+message statisticRequestMessage {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
+    int32 granularity = 4;
+    repeated metadataConfig metadataConfig = 5;
+}
+
+// Requests all chunk - from startChunkId to endChunkId (inclusive the starting and ending chunks)
+message chunkRequestMessage {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
+}
+
+message chunkResponseMessage {
+    repeated chunk chunks = 1;
+}
+
+message statisticResponseMessage {
+    repeated digest digests = 1;
+}

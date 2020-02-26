@@ -1,0 +1,46 @@
+# Copyright (c) 2020 by ETH Zurich, see AUTHORS file for more
+# Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
+
+version: "3.5"
+
+services:
+  cassandra:
+    container_name: cassandra
+    image: "cassandra:3.11"
+    ports:
+      - "9042:9042"
+    hostname: casandra
+    networks:
+      - tcnw
+
+  timecrypt-server:
+    container_name: timecrypt-server
+    image: "eth/timecrypt"
+    ports:
+      - "15000:15000"
+    build: .
+    command: server
+    depends_on:
+      - cassandra
+    environment:
+       - TIMECRYPT_PORT=15000
+       - TIMECRYPT_CASSANDRA_HOST=cassandra
+       - TIMECRYPT_CASSANDRA_PORT=9042
+    networks:
+      - tcnw
+
+# interactive tty does not work
+# timecrypt-client:
+#   container_name: timecrypt-client
+#   build: .
+#   stdin_open: true
+#   tty: true
+#   command: client
+#   depends_on:
+#     - timecrypt-server
+#   links:
+#      - timecrypt-server
+
+networks:
+  tcnw:
+    name: timecrypt-network

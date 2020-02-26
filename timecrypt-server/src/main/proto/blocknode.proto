@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package ch.ethz.dsg.timecrypt.blockindex.encoding;
+
+option java_package = "ch.ethz.dsg.timecrypt.index.blockindex.encoding";
+option java_outer_classname = "BlockNodeEncoding";
+
+message BinBlockNodeContent {
+    repeated BinMetaNode contents = 1;
+}
+
+message BinMetaNode {
+    required bool isNull = 1;
+    repeated bytes content = 2;
+}

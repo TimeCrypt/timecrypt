@@ -1,0 +1,145 @@
+syntax = "proto2";
+
+package ch.ethz.dsg.timecrypt.protocol;
+
+option java_package = "ch.ethz.dsg.timecrypt.protocol";
+option java_outer_classname = "TimeCryptProtocol";
+
+
+enum MessageRequestType {
+    CREATE_STREAM = 0;
+    DELETE_STREAM = 1;
+    GET_CHUNKS = 2;
+    INSERT_CHUNK = 3;
+    GET_STATISTICS = 5;
+    GET_METAINFO = 6;
+    GET_MULTI = 7;
+}
+
+message RequestMessage {
+    required MessageRequestType type = 1;
+    oneof request {
+        CreateStream createStream = 2;
+        DeleteStream deleteStream = 3;
+        GetChunks getChunks = 4;
+        InsertChunk insertChunk = 5;
+        GetStatistics getStatistics = 6;
+        GetMetaConfiguration getMetaConfig = 7;
+        GetStatisticsMulti getStatisticsMulti = 8;
+    }
+}
+
+message GetMetaConfiguration {
+    required uint64 uid = 1;
+    required string owner = 2;
+}
+
+message MetaConfig {
+    required uint32 numdigests = 1;
+}
+
+
+message CreateStream {
+    required uint64 uid = 1;
+    required string owner = 2;
+    required MetaConfig metadataConfig = 3;
+}
+
+message DeleteStream {
+    required uint64 uid = 1;
+    required string owner = 2;
+}
+
+message GetChunks {
+    required uint64 uid = 1;
+    required string owner = 2;
+    required int64 from = 3;
+    required int64 to = 4;
+}
+
+
+message InsertChunk {
+    required uint64 uid = 1;
+    required string owner = 2;
+    required int64 from = 3;
+    required int64 to = 4;
+    required int32 key = 5;
+    required bytes chunk = 6;
+    repeated Metadata metadata = 7;
+}
+
+message Metadata {
+    required uint32 digestid = 1;
+    required bytes data = 2;
+}
+
+message GetStatistics {
+    required uint64 uid = 1;
+    required string owner = 2;
+    required int64 from = 3;
+    required int64 to = 4;
+    required int64 granularity = 5;
+    repeated uint32 digestid = 6;
+}
+
+message GetStatisticsMulti {
+    required uint64 uidFrom = 1;
+    required uint64 uidTo = 2;
+    required string owner = 3;
+    required int64 from = 4;
+    required int64 to = 5;
+    required int64 granularity = 6;
+    repeated uint32 digestid = 7;
+}
+
+
+enum MessageResponseType {
+    DATA_RESPONSE = 0;
+    STATISTICS_RESPONSE = 1;
+    ERROR_RESPONSE = 2;
+    SUCCESS_RESPONSE = 3;
+    MULTIRESPONSE = 4;
+    META_CONFIG_RESPONSE = 5;
+}
+
+
+message ResponseMessage {
+    required MessageResponseType type = 1;
+    oneof request {
+        DataResponse dataResponse = 2;
+        StatisticsResponse statisticsResponse = 3;
+        ErrorResponse errorResponse = 4;
+        SuccessResponse successResponse = 5;
+        MultiDataTransfer multiTransfer = 6;
+        MetaConfigResponse metConfigResponse = 7;
+    }
+}
+
+message MetaConfigResponse {
+    repeated MetaConfig metaConfig = 1;
+}
+
+message MultiDataTransfer {
+    required MessageResponseType messageType = 1;
+    required int32 numTransfers = 2;
+}
+
+message DataResponse {
+    required int32 key = 1;
+    required bytes data = 2;
+}
+
+
+message StatisticsResponse {
+    repeated Metadata data = 1;
+}
+
+message ErrorResponse {
+    required int32 id = 1;
+    required string message = 2;
+}
+
+message SuccessResponse {
+    required int32 id = 1;
+    required string message = 2;
+}
