@@ -3,20 +3,11 @@
 TimeCrypt, a system that provides scalable and real-time analytics over large volumes of encrypted time series data.
 In TimeCrypt, data is encrypted end-to-end, and authorized parties can only decrypt and verify queries within their authorized access scope.
 
-TimeCrypt achieves its competitive performance through a careful design of cryptographic primitives tailored for time series data workloads.
-Most important it introduces a partially homomorphic-encryption-based access control scheme (HEAC) that allows computations on the encrypted data.
-HEAC, in essence is based on a symmetric homomorphic encryption.
-However, we improve its performance by a factor of 2x for time series workloads by mapping keys to time and optimizing it for in-range ciphertext aggregations.
-
-With those aggregations the server can pre compute statistical responses over large amounts of data without any knowledge about the plain text in near plain text speed.
-Given this the client can then compute even more sophisticated statistical results.
-For example a client can calculate the average over a set of data points with just one division if the server already provides the sum and count of the data points.
-
 See [the Paper](https://www.usenix.org/system/files/nsdi20-paper-burkhalter.pdf) for more details.
 
 ## Structure of the repository
 This repository is split into three parts:
-- [**timecrypt-crypto**](timecrypt-crypto/README.md): The cryptographic library for TimeCrypt. It contains of the partially homomorphic-encryption-based access control scheme (HEAC) for different key lengths as well as the key derivation tree implementations.
+- [**timecrypt-crypto**](timecrypt-crypto/README.md): The cryptographic library for TimeCrypt. It contains of the partially homomorphic-encryption-based access control construction (HEAC) for different key lengths as well as the key derivation tree implementations.
 - [**timecrypt-server**](timecrypt-server/README.md): A prototypical implementation of a TimeCrypt server that stores its data in Cassandra. The server takes care of storing the cunks of raw data as well as the digests of aggregatable meta data.
 - [**timecrypt-client**](timecrypt-client/README.md): A example implementation of a client. The client provides a [Java-API](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TimeCryptClient.java) for interacting with TimeCrypt as well as an [interactive (the cli-client)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/CliClient.java) and [non-interactive CLI implementation (the testbed)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TestBed.java) that simulates a producer like an IoT device.
 
