@@ -1,5 +1,7 @@
 # TimeCrypt
 
+[![Build Status](https://travis-ci.org/TimeCrypt/timecrypt.svg?branch=master)](https://travis-ci.org/TimeCrypt/timecrypt)
+
 TimeCrypt, a system that provides scalable and real-time analytics over large volumes of encrypted time series data.
 In TimeCrypt, data is encrypted end-to-end, and authorized parties can only decrypt and verify queries within their authorized access scope.
 
