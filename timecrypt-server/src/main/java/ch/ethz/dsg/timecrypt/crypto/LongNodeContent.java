@@ -9,29 +9,32 @@ import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
 
 import java.nio.ByteBuffer;
 
-public class IntegerContent implements NodeContent {
+public class LongNodeContent implements NodeContent {
     public long i;
 
-
-    public IntegerContent(long i) {
+    public LongNodeContent(long i) {
         this.i = i;
     }
 
-    public static IntegerContent decode(byte[] data) {
+    public static LongNodeContent decode(byte[] data) {
         byte[] tmp = new byte[data.length - 1];
         System.arraycopy(data, 1, tmp, 0, tmp.length);
         ByteBuffer rsult = ByteBuffer.wrap(tmp);
-        return new IntegerContent(rsult.getLong());
+        return new LongNodeContent(rsult.getLong());
+    }
+
+    public long getLong() {
+        return i;
     }
 
     public NodeContent copy() {
-        return new IntegerContent(i);
+        return new LongNodeContent(i);
     }
 
     public void mergeOther(NodeContent otherContent) {
-        if (!(otherContent instanceof IntegerContent))
+        if (!(otherContent instanceof LongNodeContent))
             return;
-        this.i += ((IntegerContent) otherContent).i;
+        this.i += ((LongNodeContent) otherContent).i;
     }
 
     public NodeContent mergeOtherCopy(NodeContent otherContent) {
@@ -42,13 +45,13 @@ public class IntegerContent implements NodeContent {
 
     public byte[] encode() {
         ByteBuffer buff = ByteBuffer.allocate(1 + 8);
-        buff.put(CryptoContentFactory.INTERGER_TYPE);
+        buff.put(CryptoContentFactory.LONG_TYPE);
         buff.putLong(this.i);
         return buff.array();
     }
 
     public NodeContent createEmpty() {
-        return new IntegerContent(0);
+        return new LongNodeContent(0);
     }
 
     public String getStringRepresentation() {

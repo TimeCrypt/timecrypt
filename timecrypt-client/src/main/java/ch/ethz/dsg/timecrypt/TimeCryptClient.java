@@ -17,6 +17,8 @@ import ch.ethz.dsg.timecrypt.client.streamHandling.*;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,9 +58,13 @@ public class TimeCryptClient {
     private final TimeCryptProfile profile;
 
     private final Map<Long, ChunkHandler> chunkHandlers;
-    private final Map<Long, Thread> chunkHandlerThreads;
+    private final Map<Long, Pair<Thread, ChunkHandler>> chunkHandlerThreads;
 
     private final ServerInterface serverInterface;
+
+    public ServerInterface getServerInterface() {
+        return serverInterface;
+    }
 
     /**
      * Create a new TimeCrypt client. The server a profile and a keyStore have to be provided.
@@ -99,7 +105,7 @@ public class TimeCryptClient {
      * @param metaDataTypes       The kind of meta data that should be stored on the server (encrypted). The meta data
      *                            that is stored determines which statistical queries can be executed without scanning
      *                            all raw data.
-     * @param encryptionSchema    The metadata storage algorithm defines the security but also the performance of
+     * @param encryptionScheme    The metadata storage algorithm defines the security but also the performance of
      *                            the metadata encryption wit HEAC.
      * @param localChunkStorePath The path to the local chunk store. In this local chunk store all chunks will be stored
      *                            before sending them to the server. This shall prevent that chunks will be send twice
@@ -112,14 +118,15 @@ public class TimeCryptClient {
     public long createStream(String name, String description, TimeUtil.Precision chunkSize,
                              List<TimeUtil.Precision> resolutionLevels,
                              List<StreamMetaData.MetadataType> metaDataTypes,
-                             StreamMetaData.MetadataEncryptionSchema encryptionSchema,
-                             String localChunkStorePath) throws CouldNotStoreException, IOException {
+                             StreamMetaData.MetadataEncryptionScheme encryptionScheme,
+                             String localChunkStorePath,
+                             Date startDate) throws CouldNotStoreException, IOException {
 
         // TODO: This could be based on random so the access pattern is not so obvious.
         List<StreamMetaData> metaData = new ArrayList<>();
         int metadataId = 0;
         for (StreamMetaData.MetadataType type : metaDataTypes) {
-            metaData.add(MetaDataFactory.getMetadataOfType(metadataId, type, encryptionSchema));
+            metaData.add(MetaDataFactory.getMetadataOfType(metadataId, type, encryptionScheme));
             metadataId++;
         }
 
@@ -146,8 +153,14 @@ public class TimeCryptClient {
             throw new CouldNotStoreException("Could not store the stream key in the keystore");
         }
 
-        Stream stream = new Stream(streamId, name, description, chunkSize, resolutionLevels, metaData,
+        Stream stream = null;
+        if (startDate == null)
+            stream = new Stream(streamId, name, description, chunkSize, resolutionLevels, metaData,
                 localChunkStorePath);
+        else
+            stream = new Stream(streamId, name, description, chunkSize, resolutionLevels, metaData,
+                    localChunkStorePath, startDate);
+
         profile.addStream(stream);
         try {
             if (!profile.syncProfile(false)) {
@@ -164,6 +177,48 @@ public class TimeCryptClient {
         }
 
         return streamId;
+    }
+
+    /**
+     * Create a new stream.
+     *
+     * @param name                A name for the stream - this will not be exposed to the server and only be used for
+     *                            display purposes.
+     * @param description         A description for the stream - this will not be exposed to the server and only be used
+     *                            for display purposes.
+     * @param chunkSize           The size of the raw data chunks. This determines also the minimal size of fast
+     *                            statistical queries to the server.
+     * @param resolutionLevels    The aggregation levels for stream sharing.
+     * @param metaDataTypes       The kind of meta data that should be stored on the server (encrypted). The meta data
+     *                            that is stored determines which statistical queries can be executed without scanning
+     *                            all raw data.
+     * @param encryptionScheme    The metadata storage algorithm defines the security but also the performance of
+     *                            the metadata encryption wit HEAC.
+     * @param localChunkStorePath The path to the local chunk store. In this local chunk store all chunks will be stored
+     *                            before sending them to the server. This shall prevent that chunks will be send twice
+     *                            with different payload and by this expose their keys.
+     * @return The ID that was assigned to the stream by the server
+     * @throws CouldNotStoreException The server did not allow to store the stream or there were issues with key
+     *                                creation on the client.
+     * @throws IOException            Exception that is thrown if the local chunk store could not be created.
+     */
+    public long createStream(String name, String description, TimeUtil.Precision chunkSize,
+                             List<TimeUtil.Precision> resolutionLevels,
+                             List<StreamMetaData.MetadataType> metaDataTypes,
+                             StreamMetaData.MetadataEncryptionScheme encryptionScheme,
+                             String localChunkStorePath) throws CouldNotStoreException, IOException {
+
+        return this.createStream(name, description, chunkSize, resolutionLevels,
+                metaDataTypes, encryptionScheme, localChunkStorePath, null);
+    }
+
+    public long createStream(String name, String description, TimeUtil.Precision chunkSize,
+                             List<TimeUtil.Precision> resolutionLevels,
+                             StreamMetaData.MetadataEncryptionScheme encryptionScheme,
+                             String localChunkStorePath) throws CouldNotStoreException, IOException {
+
+        return this.createStream(name, description, chunkSize, resolutionLevels,
+                DefaultConfigs.getDefaultMetaDataConfig(), encryptionScheme, localChunkStorePath, null);
     }
 
     /**
@@ -231,13 +286,18 @@ public class TimeCryptClient {
                     LOGGER.error("Could not receive the key for the stream.", e);
                     throw new CouldNotStoreException("Could not receive the key for the stream.");
                 }
-                this.chunkHandlerThreads.put(streamId, new Thread(streamHandler));
-                this.chunkHandlerThreads.get(streamId).start();
+                this.chunkHandlerThreads.put(streamId, new ImmutablePair<>(new Thread(streamHandler), streamHandler));
+                this.chunkHandlerThreads.get(streamId).getLeft().start();
                 this.chunkHandlers.put(streamId, streamHandler);
 
                 streamHandler.putDataPoint(dataPoint);
             }
         }
+    }
+
+    public BackupHandler getHandlerForBackupInsert(long streamId, Date backupStartTime) throws CouldNotReceiveException, InvalidQueryException, IOException {
+        return new BackupHandler(profile.getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH),  this.serverInterface, backupStartTime);
     }
 
     /**
@@ -254,14 +314,17 @@ public class TimeCryptClient {
                     LOGGER.debug("Terminating ChunkHandler for Stream " + streamId);
                     chunkHandlers.get(streamId).terminate();
                     LOGGER.debug("Waking up ChunkHandler for Stream " + streamId);
-                    chunkHandlerThreads.get(streamId).interrupt();
+                    ChunkHandler theObject = chunkHandlerThreads.get(streamId).getRight();
+                    synchronized (theObject) {
+                        theObject.notify();
+                    }
                 } catch (Exception e) {
                     LOGGER.error("Catched exception while shutting down chunk handler for stream " + streamId +
                             " ignoring it to ensure clean shutdown", e);
                 }
                 try {
                     LOGGER.debug("Start waiting for chunk handler for stream ID " + streamId + " to finish.");
-                    chunkHandlerThreads.get(streamId).join(MAX_CHUNK_HANDLER_SHUTDOWN_TIME);
+                    chunkHandlerThreads.get(streamId).getLeft().join(MAX_CHUNK_HANDLER_SHUTDOWN_TIME);
                 } catch (InterruptedException e) {
                     LOGGER.error("Got interrupted while waiting for chunk handler for stream ID " + streamId +
                             " to finish.", e);
@@ -345,6 +408,38 @@ public class TimeCryptClient {
      * Perform a statistical query on a stream.
      *
      * @param streamId       The stream to perform the operation on.
+     * @param from           The start time of the query. Data points at exactly this time will be INCLUDED in the
+     *                       result of the query.
+     * @param to             The end time of the query. Data points at exactly this time will be EXCLUDED in the
+     *                       result of the query.
+     * @param queryOps       The operations that should be performed on the stream in the selected interval.
+     * @param allowChunkScan Should it be allowed to compute the query on the raw data inside the chunks. Usually this
+     *                       is not intended because it takes a lot of time and ressources, to fetch the data, decrypt
+     *                       it and perform the query on the raw data.
+     * @return A list of interval representing the results of the query in order.
+     * @throws CouldNotReceiveException      Something went wrong with the retrieval of the data from the server.
+     * @throws InvalidQueryException         Exception that indicates that the issuer of the query tried an unsupported
+     *                                       operation with this query. If the query will be retried without a change
+     *                                       it will always fail.
+     * @throws QueryNeedsChunkScanException  Exception that indicates that a valid query can not be executed without
+     *                                       accessing the Chunks that store the actual data points.
+     * @throws QueryFailedException          Exception that indicates that a problem occurred during the execution of
+     *                                       a valid query. A retry of the query might help.
+     * @throws InvalidQueryIntervalException Exception that indicates that the given interval does not align with the
+     *                                       interval of the TimeCrypt chunks and therefore can not be executed at all
+     *                                       or can not be executed in a fast index-access only manner.
+     */
+    public Interval performQuery(long streamId, Date from, Date to, List<Query.SupportedOperation> queryOps, boolean
+            allowChunkScan) throws CouldNotReceiveException, InvalidQueryException, QueryNeedsChunkScanException,
+            QueryFailedException, InvalidQueryIntervalException {
+        return Query.performQuery(getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface, from, to, queryOps, allowChunkScan);
+    }
+
+    /**
+     * Perform a statistical query on a stream.
+     *
+     * @param streamId       The stream to perform the operation on.
      * @param chunkIdFrom    The start chunk ID of the query. Data points in this chunk time will be INCLUDED in the
      *                       result of the query.
      * @param chunkIdTo      The end chunk ID of the query. Data points in this chunk time will be EXCLUDED in the
@@ -373,6 +468,40 @@ public class TimeCryptClient {
                         streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface,
                 new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdFrom)),
                 new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdTo)), queryOp, allowChunkScan);
+    }
+
+    /**
+     * Perform a statistical query on a stream.
+     *
+     * @param streamId       The stream to perform the operation on.
+     * @param chunkIdFrom    The start chunk ID of the query. Data points in this chunk time will be INCLUDED in the
+     *                       result of the query.
+     * @param chunkIdTo      The end chunk ID of the query. Data points in this chunk time will be EXCLUDED in the
+     *                       result of the query.
+     * @param queryOps       The operations that should be performed on the stream in the selected interval.
+     * @param allowChunkScan Should it be allowed to compute the query on the raw data inside the chunks. Usually this
+     *                       is not intended because it takes a lot of time and ressources, to fetch the data, decrypt
+     *                       it and perform the query on the raw data.
+     * @return An interval representing the result of the query.
+     * @throws CouldNotReceiveException      Something went wrong with the retrieval of the data from the server.
+     * @throws InvalidQueryException         Exception that indicates that the issuer of the query tried an unsupported
+     *                                       operation with this query. If the query will be retried without a change
+     *                                       it will always fail.
+     * @throws QueryNeedsChunkScanException  Exception that indicates that a valid query can not be executed without
+     *                                       accessing the Chunks that store the actual data points.
+     * @throws QueryFailedException          Exception that indicates that a problem occurred during the execution of
+     *                                       a valid query. A retry of the query might help.
+     * @throws InvalidQueryIntervalException Exception that indicates that the given interval does not align with the
+     *                                       interval of the TimeCrypt chunks and therefore can not be executed at all
+     *                                       or can not be executed in a fast index-access only manner.
+     */
+    public Interval performQueryForChunkId(long streamId, long chunkIdFrom, long chunkIdTo, List<Query.SupportedOperation> queryOps, boolean
+            allowChunkScan) throws CouldNotReceiveException, InvalidQueryException, QueryNeedsChunkScanException,
+            QueryFailedException, InvalidQueryIntervalException {
+        return Query.performQuery(getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                        streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface,
+                new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdFrom)),
+                new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdTo)), queryOps, allowChunkScan);
     }
 
     /**
@@ -406,6 +535,39 @@ public class TimeCryptClient {
             QueryNeedsChunkScanException, QueryFailedException, InvalidQueryIntervalException {
         return Query.performQueryForRange(getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
                 streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface, from, to, queryOp, precision, allowChunkScan);
+    }
+
+    /**
+     * Perform a statistical query with a certain granularity on a stream.
+     *
+     * @param streamId       The stream to perform the operation on.
+     * @param from           The start time of the query. Data points at exactly this time will be INCLUDED in the
+     *                       result of the query.
+     * @param to             The end time of the query. Data points at exactly this time will be EXCLUDED in the
+     *                       result of the query.
+     * @param queryOps       The operations that should be performed on the stream in the intervals.
+     * @param allowChunkScan Should it be allowed to compute the query on the raw data inside the chunks. Usually this
+     *                       is not intended because it takes a lot of time and ressources, to fetch the data, decrypt
+     *                       it and perform the query on the raw data.
+     * @param precision      The size of the sub intervals that shall be computed.
+     * @return A list of intervals representing the result of the query in the requested intervals.
+     * @throws CouldNotReceiveException      Something went wrong with the retrieval of the data from the server.
+     * @throws InvalidQueryException         Exception that indicates that the issuer of the query tried an unsupported
+     *                                       operation with this query. If the query will be retried without a change
+     *                                       it will always fail.
+     * @throws QueryNeedsChunkScanException  Exception that indicates that a valid query can not be executed without
+     *                                       accessing the Chunks that store the actual data points.
+     * @throws QueryFailedException          Exception that indicates that a problem occurred during the execution of
+     *                                       a valid query. A retry of the query might help.
+     * @throws InvalidQueryIntervalException Exception that indicates that the given interval does not align with the
+     *                                       interval of the TimeCrypt chunks and therefore can not be executed at all
+     *                                       or can not be executed in a fast index-access only manner.
+     */
+    public List<Interval> performRangeQuery(long streamId, Date from, Date to, List<Query.SupportedOperation> queryOps, boolean
+            allowChunkScan, long precision) throws CouldNotReceiveException, InvalidQueryException,
+            QueryNeedsChunkScanException, QueryFailedException, InvalidQueryIntervalException {
+        return Query.performQueryForRange(getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface, from, to, queryOps, precision, allowChunkScan);
     }
 
 
@@ -442,5 +604,40 @@ public class TimeCryptClient {
                         streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface,
                 new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdFrom)),
                 new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdTo)), queryOp, precision, allowChunkScan);
+    }
+
+    /**
+     * Perform a statistical query with a certain granularity on a stream.
+     *
+     * @param streamId       The stream to perform the operation on.
+     * @param chunkIdFrom    The start chunk ID of the query. Data points in this chunk time will be INCLUDED in the
+     *                       result of the query.
+     * @param chunkIdTo      The end chunk ID of the query. Data points in this chunk time will be EXCLUDED in the
+     *                       result of the query.
+     * @param queryOps       The operations that should be performed on the stream in the intervals.
+     * @param allowChunkScan Should it be allowed to compute the query on the raw data inside the chunks. Usually this
+     *                       is not intended because it takes a lot of time and ressources, to fetch the data, decrypt
+     *                       it and perform the query on the raw data.
+     * @param precision      The size of the sub intervals that shall be computed.
+     * @return A list of intervals representing the result of the query in the requested intervals.
+     * @throws CouldNotReceiveException      Something went wrong with the retrieval of the data from the server.
+     * @throws InvalidQueryException         Exception that indicates that the issuer of the query tried an unsupported
+     *                                       operation with this query. If the query will be retried without a change
+     *                                       it will always fail.
+     * @throws QueryNeedsChunkScanException  Exception that indicates that a valid query can not be executed without
+     *                                       accessing the Chunks that store the actual data points.
+     * @throws QueryFailedException          Exception that indicates that a problem occurred during the execution of
+     *                                       a valid query. A retry of the query might help.
+     * @throws InvalidQueryIntervalException Exception that indicates that the given interval does not align with the
+     *                                       interval of the TimeCrypt chunks and therefore can not be executed at all
+     *                                       or can not be executed in a fast index-access only manner.
+     */
+    public List<Interval> performRangeQueryForChunkId(long streamId, long chunkIdFrom, long chunkIdTo, List<Query.SupportedOperation> queryOps, boolean
+            allowChunkScan, long precision) throws CouldNotReceiveException, InvalidQueryException,
+            QueryNeedsChunkScanException, QueryFailedException, InvalidQueryIntervalException {
+        return Query.performQueryForRange(getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                        streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface,
+                new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdFrom)),
+                new Date(TimeUtil.getChunkStartTime(getStream(streamId), chunkIdTo)), queryOps, precision, allowChunkScan);
     }
 }

@@ -11,12 +11,12 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Collection;
 
 class CountMetaData implements StreamMetaData {
-    private final MetadataEncryptionSchema encryptionSchema;
+    private final MetadataEncryptionScheme encryptionScheme;
     private final int id;
 
     @JsonCreator
-    public CountMetaData(MetadataEncryptionSchema encryptionSchema, int id) {
-        this.encryptionSchema = encryptionSchema;
+    public CountMetaData(MetadataEncryptionScheme encryptionScheme, int id) {
+        this.encryptionScheme = encryptionScheme;
         this.id = id;
     }
 
@@ -31,8 +31,8 @@ class CountMetaData implements StreamMetaData {
     }
 
     @Override
-    public MetadataEncryptionSchema getEncryptionSchema() {
-        return encryptionSchema;
+    public MetadataEncryptionScheme getEncryptionScheme() {
+        return encryptionScheme;
     }
 
     @Override

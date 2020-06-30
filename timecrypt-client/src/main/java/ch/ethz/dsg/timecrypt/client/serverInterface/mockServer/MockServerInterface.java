@@ -3,11 +3,15 @@
  * Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
  */
 
-package ch.ethz.dsg.timecrypt.client.serverInterface;
+package ch.ethz.dsg.timecrypt.client.serverInterface.mockServer;
 
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotReceiveException;
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotStoreException;
 import ch.ethz.dsg.timecrypt.client.exceptions.InvalidQueryException;
+import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedChunk;
+import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest;
+import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
+import ch.ethz.dsg.timecrypt.client.serverInterface.ServerInterface;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -275,8 +279,8 @@ public class MockServerInterface implements ServerInterface {
                 if (requestedMetaData.getId() >= streamMetaData.size() || requestedMetaData.getId() < 0) {
                     throw new InvalidQueryException("Requested meta data item has invalid ID" + requestedMetaData);
                 }
-                if (requestedMetaData.getEncryptionSchema() !=
-                        streamMetaData.get(requestedMetaData.getId()).getEncryptionSchema()) {
+                if (requestedMetaData.getEncryptionScheme() !=
+                        streamMetaData.get(requestedMetaData.getId()).getEncryptionScheme()) {
                     throw new InvalidQueryException("Requested meta data item has not the same encryption as the " +
                             "corresponding item on the server. Server: " + streamMetaData.get(
                             requestedMetaData.getId()) + " requested: " + requestedMetaData);
@@ -289,8 +293,8 @@ public class MockServerInterface implements ServerInterface {
             float nrOfSubIntervals = (chunkIdTo - chunkIdFrom) / (float) granularity;
             for (long i = 0; i < nrOfSubIntervals; i++) {
                 long from = chunkIdFrom + (i * granularity);
-                long to = chunkIdFrom + ((i + 1) * granularity) - 1;
-                returnList.add(aggregateDigests(requestMetaData, digests.subMap(from, (to + 1)).values(), streamId, from, to));
+                long to = chunkIdFrom + ((i + 1) * granularity);
+                returnList.add(aggregateDigests(requestMetaData, digests.subMap(from, (to)).values(), streamId, from, to));
             }
             return returnList;
 
@@ -356,12 +360,12 @@ public class MockServerInterface implements ServerInterface {
                 throw new CouldNotStoreException("Chunk ID did not match the expected next chunk");
             }
 
-            if (digest.chunkIdFrom == digest.chunkIdTo && digest.chunkIdFrom == chunkId) {
+            if (digest.getChunkIdFrom() == digest.getChunkIdTo() - 1 && digest.getChunkIdFrom() == chunkId) {
                 digests.put(chunkId, digest);
             } else {
                 throw new CouldNotStoreException("Digest range did not match the expected range. Digest range is " +
-                        "from Chunk ID" + digest.chunkIdFrom + " to Chunk ID " + digest.chunkIdTo + " expected it to" +
-                        "be exactly from Chunk ID" + chunkId + " to Chunk ID " + chunkId);
+                        "from Chunk ID" + digest.getChunkIdFrom() + " to Chunk ID " + digest.getChunkIdTo() +
+                        " expected it to be exactly from Chunk ID" + chunkId + " to Chunk ID " + chunkId);
             }
 
             return chunkId;

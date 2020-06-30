@@ -5,19 +5,18 @@
 
 import ch.ethz.dsg.timecrypt.BasicClient;
 import ch.ethz.dsg.timecrypt.Server;
-import ch.ethz.dsg.timecrypt.crypto.IntegerContent;
+import ch.ethz.dsg.timecrypt.crypto.LongNodeContent;
 import ch.ethz.dsg.timecrypt.db.CassandraBlockTreeManager;
 import ch.ethz.dsg.timecrypt.db.CassandraDatabaseManager;
 import ch.ethz.dsg.timecrypt.index.Chunk;
 import ch.ethz.dsg.timecrypt.index.blockindex.BlockTree;
 import ch.ethz.dsg.timecrypt.index.blockindex.DebugBlockTreeManager;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
-import com.datastax.driver.core.Cluster;
-import info.archinnov.achilles.embedded.CassandraEmbeddedServerBuilder;
-import info.archinnov.achilles.embedded.CassandraShutDownHook;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.io.IOException;
 import java.util.List;
@@ -30,31 +29,30 @@ public class TestServerBasic {
     private static Thread server;
     private static Server runnable;
 
-    static Cluster cassandraCluster;
-    static final CassandraShutDownHook shutdownHook = new CassandraShutDownHook();
+    private static GenericContainer cassandra;
+    private static String[] cassandraHost;
+    private static int cassandraPort;
 
     @BeforeClass
     public static void startServer() {
-        // Build a mock cassandra server
-        cassandraCluster = CassandraEmbeddedServerBuilder
-                .builder()
-                .withClusterName("Test Cluster")
-                .withListenAddress("127.0.0.1")
-                .withRpcAddress("127.0.0.1")
-                .withBroadcastAddress("127.0.0.1")
-                .withBroadcastRpcAddress("127.0.0.1")
-                .withConcurrentReads(16)
-                .withConcurrentWrites(16)
-                .withCQLPort(9042)
-                .withDurableWrite(false)
-                .cleanDataFilesAtStartup(true)
-                .withShutdownHook(shutdownHook)
-                .buildNativeCluster();
+        // memory limit memory to 2 GB since cassandra somehow eats 5GB
+        cassandra = new GenericContainer<>("cassandra:3.11")
+                .withCreateContainerCmdModifier(cmd -> cmd.withMemory((long) 4 * 1024 * 1024 * 1024))
+                .withExposedPorts(Server.DEFAULT_CASSANDRA_PORT);
+        cassandra.start();
+
+        cassandra.waitingFor(Wait.forLogMessage(".*Starting listening for CQL clients.*\\n", 1));
+
+        cassandraHost = new String[1];
+        cassandraHost[0] = cassandra.getContainerIpAddress();
+        cassandraPort = cassandra.getMappedPort(Server.DEFAULT_CASSANDRA_PORT);
 
         runnable = new Server(Server.DEFAULT_PORT, 2, 16, 32, 2000,
-                1000, cassandraCluster, false, 2, 16);
+                1000, cassandraHost, cassandraPort, false,
+                2, 16, Server.InterfaceProvider.NETTY_SERVER_INTERFACE);
         server = new Thread(runnable);
         server.start();
+
         try {
             Thread.sleep(5000);
         } catch (InterruptedException e) {
@@ -72,13 +70,7 @@ public class TestServerBasic {
         }
 
         // Shutdown of the embedded Cassandra instance
-        shutdownHook.shutDownNow();
-    }
-
-    @Test
-    public void testCassandraMigration() {
-        new CassandraDatabaseManager(cassandraCluster, 1);
-        cassandraCluster.connect("timecrypt");
+        cassandra.stop();
     }
 
     @Test
@@ -86,12 +78,12 @@ public class TestServerBasic {
         DebugBlockTreeManager man = new DebugBlockTreeManager();
         BlockTree tree = man.createTree(1, "1", 2, 1);
         for (int i = 0; i < 16; i++) {
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
 //            System.out.println(tree.toString());
         }
 
-        IntegerContent cont = (IntegerContent) tree.getAggregation(0, 10)[0];
+        LongNodeContent cont = (LongNodeContent) tree.getAggregation(0, 10)[0];
 //        System.out.println(cont.i);
     }
 
@@ -101,7 +93,7 @@ public class TestServerBasic {
         DebugBlockTreeManager man = new DebugBlockTreeManager();
         BlockTree tree = man.createTree(1, "1", 2, 1);
         for (int i = 0; i < iter; i++) {
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
         }
 
@@ -115,34 +107,34 @@ public class TestServerBasic {
 
     @Test
     public void testTreeCassandra() throws Exception {
-        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
         BlockTree tree = man.createTree(1, "1", 2, 1);
         for (int i = 0; i < 16; i++) {
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
 //            System.out.println(tree.toString());
         }
 
-        IntegerContent cont = (IntegerContent) tree.getAggregation(0, 10)[0];
+        LongNodeContent cont = (LongNodeContent) tree.getAggregation(0, 10)[0];
         //       System.out.println(cont.i);
     }
 
     @Test
     public void testTreeCassandraSum() throws Exception {
-        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
         int iter = 100;
         BlockTree tree = man.createTree(1, "1", 32, 1);
         for (int i = 0; i < iter; i++) {
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
         }
 
         for (int i = 0; i < iter; i++) {
             for (int j = i + 1; j < iter; j++) {
                 assertEquals(String.valueOf(j - i), tree.getAggregation(i, j)[0].getStringRepresentation());
-//                System.out.format("From %d To %d ok\n", i, j);
+                System.out.format("From %d to %d ok\n", i, j);
             }
         }
 
@@ -151,21 +143,22 @@ public class TestServerBasic {
         for (int i = 0; i < iter; i++) {
             for (int j = i + 1; j < iter; j++) {
                 assertEquals(String.valueOf(j - i), tree.getAggregation(i, j)[0].getStringRepresentation());
-//                System.out.format("From %d To %d ok\n", i, j);
+                System.out.format("From %d To %d ok\n", i, j);
             }
+            System.out.println("Invalidating caches 2");
             man.invalidateCache();
         }
     }
 
     @Test
     public void testTreeCassandraInsertFlush() throws Exception {
-        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
         int iter = 100;
         BlockTree tree = man.createTree(1, "1", 32, 1);
         for (int i = 0; i < iter; i++) {
             man.invalidateCache();
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
         }
 
@@ -180,13 +173,13 @@ public class TestServerBasic {
 
     @Test
     public void testTreeCassandraInsertSmallCache() throws Exception {
-        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 1, 1);
         int iter = 100;
         BlockTree tree = man.createTree(1, "1", 32, 1);
         for (int i = 0; i < iter; i++) {
             man.invalidateCache();
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
         }
 
@@ -201,10 +194,10 @@ public class TestServerBasic {
 
     @Test
     public void testTreeCassandraPar() throws Exception {
-        CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man1 = new CassandraBlockTreeManager(db1, 10, 10000);
 
-        CassandraDatabaseManager db2 = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db2 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man2 = new CassandraBlockTreeManager(db2, 10, 10000);
 
         final int iter = 100;
@@ -214,7 +207,7 @@ public class TestServerBasic {
 
         BlockTree tree = man1.createTree(1, "1", 32, 1);
         for (int i = 0; i < iter; i++) {
-            tree.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+            tree.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             tree.updateToLatest();
         }
 
@@ -232,10 +225,10 @@ public class TestServerBasic {
     @Test
     public void testTreeCassandraParInsert() throws Exception {
         String user = "6";
-        CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man1 = new CassandraBlockTreeManager(db1, 10, 10000);
 
-        CassandraDatabaseManager db2 = new CassandraDatabaseManager(cassandraCluster, 1);
+        CassandraDatabaseManager db2 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man2 = new CassandraBlockTreeManager(db2, 10, 10000);
 
         final int iter = 100;
@@ -247,10 +240,10 @@ public class TestServerBasic {
             //Thread.sleep(10);
             if (i % 2 == 0) {
                 //tree1 = man1.fetchTreeMinVersion(1, user, i);
-                tree1.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+                tree1.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             } else {
                 //tree2 = man2.fetchTreeMinVersion(1, user, i);
-                tree2.insert(0, new NodeContent[]{new IntegerContent(1)}, i, i + 1);
+                tree2.insert(0, new NodeContent[]{new LongNodeContent(1)}, i, i + 1);
             }
         }
 
@@ -272,16 +265,16 @@ public class TestServerBasic {
 
         client.createStream(1, user, 1);
         for (int i = 0; i < num; i++) {
-            client.insertChunk(new Chunk(i, new byte[1]), 1, user, i, i + 1, i, new IntegerContent[]{
-                    new IntegerContent(1)
+            client.insertChunk(new Chunk(i, new byte[1]), 1, user, i, i + 1, i, new LongNodeContent[]{
+                    new LongNodeContent(1)
             });
         }
 
-        List<NodeContent[]> res = client.getStatistics(user, 1, 0, num, granulatrity, new int[] {0});
+        List<NodeContent[]> res = client.getStatistics(user, 1, 0, num, granulatrity, new int[]{0});
         assertEquals(res.size(), num / granulatrity);
 
         for (int i = 0; i < res.size(); i++) {
-            IntegerContent cont = (IntegerContent) res.get(i)[0];
+            LongNodeContent cont = (LongNodeContent) res.get(i)[0];
             assertEquals(cont.i, granulatrity);
         }
 
@@ -306,24 +299,24 @@ public class TestServerBasic {
         }
 
         String user = "User2";
-        int[] granularities = new int[] {2, 4, 8, 16, 32, 64};
+        int[] granularities = new int[]{2, 4, 8, 16, 32, 64};
         BasicClient client = new BasicClient("localhost", Server.DEFAULT_PORT);
 
 
         client.createStream(1, user, 1);
         for (int i = 0; i < numValues; i++) {
-            client.insertChunk(new Chunk(i, new byte[1]), 1, user, i, i + 1, i, new IntegerContent[]{
-                    new IntegerContent(val[i])
+            client.insertChunk(new Chunk(i, new byte[1]), 1, user, i, i + 1, i, new LongNodeContent[]{
+                    new LongNodeContent(val[i])
             });
         }
 
         for (int granularity : granularities) {
-            List<NodeContent[]> res = client.getStatistics(user, 1, 0, numValues, granularity, new int[] {0});
+            List<NodeContent[]> res = client.getStatistics(user, 1, 0, numValues, granularity, new int[]{0});
             assertEquals(res.size(), numValues / granularity);
 
 
             for (int i = 0; i < res.size(); i++) {
-                IntegerContent cont = (IntegerContent) res.get(i)[0];
+                LongNodeContent cont = (LongNodeContent) res.get(i)[0];
                 long expectedRes = 0;
                 for (int iter = i * granularity; iter < (i + 1) * granularity; iter++) {
                     expectedRes += val[iter];

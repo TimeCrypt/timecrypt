@@ -113,7 +113,7 @@ public class TestBed implements Callable<Integer> {
                     "WATCH OUT: This variable gets ignored if a existing stream is used! " +
                     "WATCH OUT: You can specify multiple encryption types. In this case multiple streams would " +
                     "be created. Default: LONG")
-    private StreamMetaData.MetadataEncryptionSchema[] metadataEncryptionSchemas = null;
+    private StreamMetaData.MetadataEncryptionScheme[] metadataEncryptionSchemes = null;
 
     @Option(names = "--stream-metadata", split = ",",
             description = "The metadata to provide for the stream statistical data " +
@@ -230,9 +230,9 @@ public class TestBed implements Callable<Integer> {
         if (streams.size() > 0) {
             LOGGER.warn("Found existing stream - ignoring all provided stream options.");
         } else if (create) {
-            if (metadataEncryptionSchemas == null) {
-                metadataEncryptionSchemas =
-                        new StreamMetaData.MetadataEncryptionSchema[]{StreamMetaData.MetadataEncryptionSchema.LONG};
+            if (metadataEncryptionSchemes == null) {
+                metadataEncryptionSchemes =
+                        new StreamMetaData.MetadataEncryptionScheme[]{StreamMetaData.MetadataEncryptionScheme.LONG};
             }
 
             if (metadataTypes == null) {
@@ -247,10 +247,10 @@ public class TestBed implements Callable<Integer> {
                 streamResulutionLevelList = Arrays.asList(streamResulutionLevels);
             }
 
-            for (StreamMetaData.MetadataEncryptionSchema enc : metadataEncryptionSchemas) {
+            for (StreamMetaData.MetadataEncryptionScheme enc : metadataEncryptionSchemes) {
                 String streamName = streamPrefix;
 
-                if (metadataEncryptionSchemas.length > 1) {
+                if (metadataEncryptionSchemes.length > 1) {
                     streamName = streamPrefix + "_" + enc.name();
                 }
                 long streamID = timeCryptClient.createStream(streamName, DEFAULT_STREAM_DESCRIPTION, streamPrecision,

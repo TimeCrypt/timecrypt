@@ -5,7 +5,7 @@
 
 package ch.ethz.dsg.timecrypt.server;
 
-import ch.ethz.dsg.timecrypt.protocol.TimeCryptProtocol;
+import ch.ethz.dsg.timecrypt.protocol.TimeCryptNettyProtocol;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
@@ -17,10 +17,10 @@ import io.netty.util.concurrent.EventExecutorGroup;
 
 public class TimeCryptServerChannelInitializer extends ChannelInitializer<SocketChannel> {
 
-    private TimeCryptRequestManager manager;
+    private NettyRequestManager manager;
     private EventExecutorGroup dbHandlerPool;
 
-    public TimeCryptServerChannelInitializer(TimeCryptRequestManager manager, EventExecutorGroup dbHandlerPool) {
+    public TimeCryptServerChannelInitializer(NettyRequestManager manager, EventExecutorGroup dbHandlerPool) {
         this.manager = manager;
         this.dbHandlerPool = dbHandlerPool;
     }
@@ -29,7 +29,7 @@ public class TimeCryptServerChannelInitializer extends ChannelInitializer<Socket
     protected void initChannel(SocketChannel ch) throws Exception {
         ChannelPipeline p = ch.pipeline();
         p.addLast(new ProtobufVarint32FrameDecoder());
-        p.addLast(new ProtobufDecoder(TimeCryptProtocol.RequestMessage.getDefaultInstance()));
+        p.addLast(new ProtobufDecoder(TimeCryptNettyProtocol.RequestMessage.getDefaultInstance()));
 
 
         p.addLast(new ProtobufVarint32LengthFieldPrepender());

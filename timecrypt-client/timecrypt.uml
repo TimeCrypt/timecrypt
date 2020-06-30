@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>ch.ethz.dsg.timecrypt</OriginalElement>
+  <nodes>
+    <node x="471.81238559340665" y="730.0">ch.ethz.dsg.timecrypt.client.streamHandling.Chunk</node>
+    <node x="303.43738559340665" y="324.0">ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData</node>
+    <node x="532.846343747937" y="324.0">ch.ethz.dsg.timecrypt.client.state.TimeCryptLocalChunkStore</node>
+    <node x="606.3040522600734" y="0.0">ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata</node>
+    <node x="1068.3740196078431" y="922.0">ch.ethz.dsg.timecrypt.client.state.TimeCryptKeystore</node>
+    <node x="157.43738559340665" y="730.0">ch.ethz.dsg.timecrypt.client.queryInterface.calculations.Calculation</node>
+    <node x="218.26150571620332" y="922.0">ch.ethz.dsg.timecrypt.client.queryInterface.Query</node>
+    <node x="537.346343747937" y="466.0">ch.ethz.dsg.timecrypt.client.streamHandling.Stream</node>
+    <node x="898.5372528388461" y="922.0">ch.ethz.dsg.timecrypt.client.streamHandling.ChunkHandler</node>
+    <node x="320.93738559340665" y="102.0">ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint</node>
+    <node x="613.3040522600734" y="102.0">ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest</node>
+    <node x="99.49620912281841" y="618.0">ch.ethz.dsg.timecrypt.client.streamHandling.Digest</node>
+    <node x="601.7954638707338" y="1094.0">ch.ethz.dsg.timecrypt.TimeCryptClient</node>
+    <node x="590.6782946843157" y="922.0">ch.ethz.dsg.timecrypt.client.state.TimeCryptProfile</node>
+    <node x="771.6782946843157" y="730.0">ch.ethz.dsg.timecrypt.client.serverInterface.ServerInterface</node>
+    <node x="834.9782946843156" y="102.0">ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedChunk</node>
+  </nodes>
+  <notes />
+  <edges />
+  <settings layout="Hierarchic Group" zoom="0.6938250428816466" x="667.5" y="573.0" />
+  <SelectedNodes>
+    <node>ch.ethz.dsg.timecrypt.client.queryInterface.Query</node>
+  </SelectedNodes>
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>public</VISIBILITY>
+</Diagram>
+

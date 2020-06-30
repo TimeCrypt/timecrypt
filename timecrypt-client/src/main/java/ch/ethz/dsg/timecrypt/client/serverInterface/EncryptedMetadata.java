@@ -12,6 +12,8 @@ import org.apache.commons.codec.binary.Hex;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Transport representation of a metadata item inside a digest.
@@ -24,116 +26,132 @@ import java.nio.ByteBuffer;
  * care of encryption.
  */
 public class EncryptedMetadata {
-    private final int numBits;
+    private final int numPayloadBits;
     private final byte[] payload;
+    private final int numMacBits;
     private final byte[] mac;
     private final int metadataId;
-    private final StreamMetaData.MetadataEncryptionSchema encryptionSchema;
+    private final StreamMetaData.MetadataEncryptionScheme encryptionScheme;
     private final boolean hasMac;
 
     /**
      * Constructor for deserialization. For usage in other contexts usually the specialized constructors supporting
      * Java long or BigInteger.
      *
-     * @param numBits          The number of bits of the payload.
+     * @param numPayloadBits   The number of bits of the payload.
      * @param payload          The binary representation of the metadata items value.
-     * @param mac              If the chosen encryption schema contains a Message Authentication Code (MAC) this field
+     * @param numMacBits       The number of bits of the MAC.
+     * @param mac              If the chosen encryption scheme contains a Message Authentication Code (MAC) this field
      *                         should contain the binary representation of it.
      * @param metadataId       The ID of this metadata item in list of metadata for its associated stream.
-     * @param encryptionSchema The encryption schema used for storing the payload and the MAC.
-     * @param hasMac           Indicator if the encryption schema contains a MAC or not.
+     * @param encryptionScheme The encryption scheme used for storing the payload and the MAC.
+     * @param hasMac           Indicator if the encryption scheme contains a MAC or not.
      */
     @JsonCreator
-    public EncryptedMetadata(int numBits, byte[] payload, byte[] mac, int metadataId,
-                             StreamMetaData.MetadataEncryptionSchema encryptionSchema, boolean hasMac) {
-        this.numBits = numBits;
+    public EncryptedMetadata(int numPayloadBits, byte[] payload, int numMacBits, byte[] mac, int metadataId,
+                             StreamMetaData.MetadataEncryptionScheme encryptionScheme, boolean hasMac) {
+        this.numPayloadBits = numPayloadBits;
         this.payload = payload;
+        this.numMacBits = numMacBits;
         this.mac = mac;
         this.metadataId = metadataId;
-        this.encryptionSchema = encryptionSchema;
+        this.encryptionScheme = encryptionScheme;
         this.hasMac = hasMac;
     }
 
     /**
-     * Creator for the LONG encryption schema.
+     * Creator for the LONG encryption scheme.
      *
      * @param payload                  The Java long representation of the encrypted metadata items value. This class
      *                                 will serialize this value to its transport representation.
      * @param metadataId               The ID of this metadata item in list of metadata for its associated stream.
-     * @param metadataEncryptionSchema The encryption schema used for storing the payload and the MAC.
+     * @param metadataEncryptionScheme The encryption scheme used for storing the payload and the MAC.
      */
     public EncryptedMetadata(long payload, int metadataId,
-                             StreamMetaData.MetadataEncryptionSchema metadataEncryptionSchema) {
-        this.encryptionSchema = metadataEncryptionSchema;
+                             StreamMetaData.MetadataEncryptionScheme metadataEncryptionScheme) {
+        this.encryptionScheme = metadataEncryptionScheme;
         this.metadataId = metadataId;
 
         this.payload = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(payload).array();
-        this.numBits = Long.SIZE;
+        this.numPayloadBits = Long.SIZE;
         this.hasMac = false;
         this.mac = new byte[0];
+        this.numMacBits = 0;
     }
 
     /**
-     * Creator for the LONG_MAC encryption schema.
+     * Creator for the LONG_MAC encryption scheme.
      *
      * @param payload                  The Java long representation of the encrypted metadata items value. This class
      *                                 will serialize this value to its transport representation.
      * @param mac                      The Java BigInteger representation of the MAC of the data items value.
      * @param metadataId               The ID of this metadata item in list of metadata for its associated stream.
-     * @param metadataEncryptionSchema The encryption schema used for storing the payload and the MAC.
+     * @param metadataEncryptionScheme The encryption scheme used for storing the payload and the MAC.
      */
     public EncryptedMetadata(long payload, BigInteger mac, int metadataId,
-                             StreamMetaData.MetadataEncryptionSchema metadataEncryptionSchema) {
-        this.encryptionSchema = metadataEncryptionSchema;
+                             StreamMetaData.MetadataEncryptionScheme metadataEncryptionScheme) {
+        this.encryptionScheme = metadataEncryptionScheme;
         this.metadataId = metadataId;
 
         this.payload = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(payload).array();
-        this.numBits = Long.SIZE;
+        this.numPayloadBits = Long.SIZE;
         this.hasMac = true;
         this.mac = mac.toByteArray();
+        this.numMacBits = mac.bitCount();
     }
 
     /**
-     * Creator for the BIG_INTEGER_* encryption schema.
+     * Creator for the BIG_INTEGER_* encryption scheme.
      *
      * @param payload                  The Java BigInteger representation of the encrypted metadata items value. This
      *                                 class will serialize this value to its transport representation.
      * @param metadataId               The ID of this metadata item in list of metadata for its associated stream.
-     * @param metadataEncryptionSchema The encryption schema used for storing the payload and the MAC.
+     * @param metadataEncryptionScheme The encryption scheme used for storing the payload and the MAC.
      */
     public EncryptedMetadata(BigInteger payload, int metadataId,
-                             StreamMetaData.MetadataEncryptionSchema metadataEncryptionSchema) {
-        this.encryptionSchema = metadataEncryptionSchema;
+                             StreamMetaData.MetadataEncryptionScheme metadataEncryptionScheme) {
+        this.encryptionScheme = metadataEncryptionScheme;
         this.metadataId = metadataId;
 
         this.payload = payload.toByteArray();
-        this.numBits = payload.bitCount();
+        this.numPayloadBits = payload.bitCount();
         this.hasMac = false;
         this.mac = new byte[0];
+        this.numMacBits = 0;
     }
 
     /**
-     * Creator for the BIG_INTEGER_*_MAC encryption schema.
+     * Creator for the BIG_INTEGER_*_MAC encryption scheme.
      *
      * @param payload                  The Java BigInteger representation of the encrypted metadata items value. This
      *                                 class will serialize this value to its transport representation.
      * @param mac                      The Java BigInteger representation of the MAC of the data items value.
      * @param metadataId               The ID of this metadata item in list of metadata for its associated stream.
-     * @param metadataEncryptionSchema The encryption schema used for storing the payload and the MAC.
+     * @param metadataEncryptionScheme The encryption scheme used for storing the payload and the MAC.
      */
     public EncryptedMetadata(BigInteger payload, BigInteger mac, int metadataId,
-                             StreamMetaData.MetadataEncryptionSchema metadataEncryptionSchema) {
-        this.encryptionSchema = metadataEncryptionSchema;
+                             StreamMetaData.MetadataEncryptionScheme metadataEncryptionScheme) {
+        this.encryptionScheme = metadataEncryptionScheme;
         this.metadataId = metadataId;
 
         this.payload = payload.toByteArray();
-        this.numBits = payload.bitCount();
+        this.numPayloadBits = payload.bitCount();
         this.hasMac = true;
         this.mac = mac.toByteArray();
+        this.numMacBits = mac.bitCount();
     }
 
     /**
-     * Returns if the chosen encryption schema consists of a mac (and by this its transport representation has a mac.
+     * Returns the number of bits in this objects MAC.
+     *
+     * @return The number of bits in the MAC.
+     */
+    public int getNumMacBits() {
+        return numMacBits;
+    }
+
+    /**
+     * Returns if the chosen encryption scheme consists of a mac (and by this its transport representation has a mac.
      *
      * @return Does the transport representation have a mac?
      */
@@ -146,8 +164,8 @@ public class EncryptedMetadata {
      *
      * @return The number of bits of the payload in its binary transport representation.
      */
-    public int getNumBits() {
-        return numBits;
+    public int getNumPayloadBits() {
+        return numPayloadBits;
     }
 
     /**
@@ -160,7 +178,7 @@ public class EncryptedMetadata {
     }
 
     /**
-     * If the chosen encryption schema contains a Message Authentication Code (MAC) this will return should the binary
+     * If the chosen encryption scheme contains a Message Authentication Code (MAC) this will return should the binary
      * representation of it.
      *
      * @return The MAC in its transport representation.
@@ -179,23 +197,23 @@ public class EncryptedMetadata {
     }
 
     /**
-     * Gets the encryption schema.
+     * Gets the encryption scheme.
      *
-     * @return The encryption schema used for the values in this encrypted metadata.
+     * @return The encryption scheme used for the values in this encrypted metadata.
      */
-    public StreamMetaData.MetadataEncryptionSchema getEncryptionSchema() {
-        return encryptionSchema;
+    public StreamMetaData.MetadataEncryptionScheme getEncryptionScheme() {
+        return encryptionScheme;
     }
 
     @Override
     public String toString() {
         return "EncryptedMetadata{" +
-                "numBits=" + numBits +
+                "numBits=" + numPayloadBits +
                 ", hasMac=" + hasMac +
                 ", payload=" + Hex.encodeHexString(payload) +
                 ", mac=" + Hex.encodeHexString(mac) +
                 ", metadataId=" + metadataId +
-                ", encryptionSchema=" + encryptionSchema +
+                ", encryptionScheme=" + encryptionScheme +
                 '}';
     }
 
@@ -206,10 +224,32 @@ public class EncryptedMetadata {
      */
     @JsonIgnore
     public long getPayloadAsLong() {
-        ByteBuffer buffer = ByteBuffer.allocate(this.numBits);
+        ByteBuffer buffer = ByteBuffer.allocate(this.numPayloadBits);
         buffer.put(this.payload);
         buffer.flip();
         return buffer.getLong();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EncryptedMetadata that = (EncryptedMetadata) o;
+        return numPayloadBits == that.numPayloadBits &&
+                numMacBits == that.numMacBits &&
+                metadataId == that.metadataId &&
+                hasMac == that.hasMac &&
+                Arrays.equals(payload, that.payload) &&
+                Arrays.equals(mac, that.mac) &&
+                encryptionScheme == that.encryptionScheme;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(numPayloadBits, numMacBits, metadataId, encryptionScheme, hasMac);
+        result = 31 * result + Arrays.hashCode(payload);
+        result = 31 * result + Arrays.hashCode(mac);
+        return result;
     }
 
     /**

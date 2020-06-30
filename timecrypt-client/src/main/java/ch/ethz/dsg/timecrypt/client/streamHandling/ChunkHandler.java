@@ -78,7 +78,7 @@ public class ChunkHandler implements Runnable {
     public void putDataPoint(DataPoint dataPoint) throws ChunkAlreadyWrittenException,
             DataPointOutsideOfWriteWindowException, StreamNotYetStartedException,
             DuplicateDataPointException {
-        synchronized (this) {
+        synchronized (this.associatedStream) {
             if (terminating) {
                 throw new ChunkAlreadyWrittenException(dataPoint.getTimestamp(), dataPoint.getValue(), "Can not write " +
                         "chunks right now - ChunkHandler is terminating");
@@ -102,7 +102,7 @@ public class ChunkHandler implements Runnable {
      * Write all remaining chunks.
      */
     public void terminate() {
-        synchronized (this) {
+        synchronized (this.associatedStream) {
             terminating = true;
         }
     }
@@ -215,7 +215,9 @@ public class ChunkHandler implements Runnable {
             }
             try {
                 LOGGER.debug("Going to sleep.");
-                Thread.sleep(associatedStream.getChunkSize());
+                synchronized (this) {
+                    this.wait(associatedStream.getChunkSize());
+                }
                 LOGGER.debug("Awake again.");
             } catch (InterruptedException e) {
                 LOGGER.info("Chunk sender thread was waken up - continuing execution");
@@ -258,7 +260,7 @@ public class ChunkHandler implements Runnable {
             encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
                     curChunk.getValues(), streamKeyManager, chunkId));
         }
-        EncryptedDigest digest = new EncryptedDigest(associatedStream.getId(), chunkId, chunkId,
+        EncryptedDigest digest = new EncryptedDigest(associatedStream.getId(), chunkId, chunkId + 1,
                 encryptedMetaData);
 
         EncryptedChunk encryptedChunk;

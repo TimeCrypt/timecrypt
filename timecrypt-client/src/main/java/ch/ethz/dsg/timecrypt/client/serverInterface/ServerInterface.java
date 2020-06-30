@@ -21,7 +21,7 @@ public interface ServerInterface {
      * Creates a new stream on the server. The server needs to know the meta data configuration of the stream and will
      * assign a stream ID.
      *
-     * @param metadataConfig A list of meta data containing their encryption schema as well as the ID of the meta data
+     * @param metadataConfig A list of meta data containing their encryption scheme as well as the ID of the meta data
      *                       in the stream. Watch out: Meta data also store their type but the server does not
      *                       necessarily need it.
      * @return The ID that was assigned to the stream by the server.
@@ -88,7 +88,7 @@ public interface ServerInterface {
      *                    the end of the query range shall be EXCLUDED from the result.
      * @param granularity The number of chunks that shall be aggregated into one digest returned by the server.
      * @param metaData    A list of stream meta data that should be included in the server response containing
-     *                    the expected meta data encryption schema as well as the ID of the meta data
+     *                    the expected meta data encryption scheme as well as the ID of the meta data
      *                    in the stream. Watch out: Meta data also store their type but the server does not
      *                    necessarily need it.
      * @return A List of Encrypted digests that represent the servers response.

@@ -38,11 +38,11 @@ public interface StreamMetaData {
     MetadataType getType();
 
     /**
-     * Return the encryption schema used by this meta data item.
+     * Return the encryption scheme used by this meta data item.
      *
-     * @return The encryption schema of the item.
+     * @return The encryption scheme of the item.
      */
-    MetadataEncryptionSchema getEncryptionSchema();
+    MetadataEncryptionScheme getEncryptionScheme();
 
     /**
      * Return the ID for this meta data item inside the list of the meta data of the corresponding stream. This must be
@@ -57,14 +57,14 @@ public interface StreamMetaData {
      * by the server.
      */
     enum MetadataType {
-        SUM, COUNT
+        SUM, COUNT, SQUARE
     }
 
     /**
-     * The different encryption schemas that are currently supported by TimeCrypt. They optionally also contain MAC
+     * The different encryption schemes that are currently supported by TimeCrypt. They optionally also contain MAC
      * for authentication of the data.
      */
-    enum MetadataEncryptionSchema {
+    enum MetadataEncryptionScheme {
         LONG, LONG_MAC, BIG_INT_128, BIG_INT_128_MAC
     }
 }

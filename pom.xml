@@ -31,6 +31,7 @@
         <module>timecrypt-crypto</module>
         <module>timecrypt-server</module>
         <module>timecrypt-client</module>
+        <module>timecrypt-examples</module>
     </modules>
 
     <build>
@@ -40,9 +41,6 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.1</version>
-                    <configuration>
-                        <skipTests>true</skipTests>
-                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

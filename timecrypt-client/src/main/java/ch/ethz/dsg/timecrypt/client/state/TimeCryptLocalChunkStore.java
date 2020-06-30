@@ -30,6 +30,11 @@ public interface TimeCryptLocalChunkStore {
     long getLastWrittenChunkId();
 
     /**
+     * Sets the last written chunk id in this storage.
+     */
+    void setLastWrittenChunkId(long id);
+
+    /**
      * Add an unwritten Chunk. Unwritten means that the chunk was not yet send to the server. It is important that the
      * chunk gets stored in the Local Chunk store before being send so in case of a power outage or similar reasons
      * there will never be two different chunks that are send to the server with the same encryption key.

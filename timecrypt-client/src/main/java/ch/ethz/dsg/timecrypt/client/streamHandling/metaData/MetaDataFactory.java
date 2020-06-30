@@ -7,23 +7,30 @@ package ch.ethz.dsg.timecrypt.client.streamHandling.metaData;
 
 
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
+import ch.ethz.dsg.timecrypt.client.streamHandling.Chunk;
 import ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint;
 import ch.ethz.dsg.timecrypt.crypto.encryption.*;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
 import java.util.Collection;
 
 public class MetaDataFactory {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(MetaDataFactory.class);
+
     // TODO switch this to reflection
     public static StreamMetaData getMetadataOfType(int id, StreamMetaData.MetadataType type,
-                                                   StreamMetaData.MetadataEncryptionSchema schema) {
+                                                   StreamMetaData.MetadataEncryptionScheme scheme) {
         switch (type) {
             case SUM:
-                return new SumMetaData(schema, id);
+                return new SumMetaData(scheme, id);
             case COUNT:
-                return new CountMetaData(schema, id);
+                return new CountMetaData(scheme, id);
+            case SQUARE:
+                return new SquareMetaData(scheme, id);
             default:
                 return null;
         }
@@ -32,29 +39,29 @@ public class MetaDataFactory {
     public static long getValueFromEncryptedMetadata(EncryptedMetadata encryptedMetadata, StreamKeyManager
             streamKeyManager, long chunkIdFrom, long chunkIdTo) throws MACCheckFailed {
 
-        switch (encryptedMetadata.getEncryptionSchema()) {
+        switch (encryptedMetadata.getEncryptionScheme()) {
             case LONG:
                 return new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).
-                        decryptMetadata(encryptedMetadata.getPayloadAsLong(), chunkIdFrom, chunkIdTo,
+                        decryptMetadata(encryptedMetadata.getPayloadAsLong(), chunkIdFrom, chunkIdTo - 1,
                                 encryptedMetadata.getMetadataId());
             case LONG_MAC:
                 return new TimeCryptEncryptionLongPlus(streamKeyManager.getChunkKeyRegression(),
                         streamKeyManager.getMacKeyAsBigInteger())
                         .decryptMetadata(new TimeCryptEncryptionLongPlus.TCAuthLongCiphertext(
                                         encryptedMetadata.getPayloadAsLong(), encryptedMetadata.getMacAsBigInteger())
-                                , chunkIdFrom, chunkIdTo, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
             case BIG_INT_128:
                 return new TimeCryptEncryptionBI(streamKeyManager.getChunkKeyRegression(), 128).
                         decryptMetadataLong(encryptedMetadata.getPayloadAsBigInteger()
-                                , chunkIdFrom, chunkIdTo, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
             case BIG_INT_128_MAC:
                 return new TimeCryptEncryptionBIPlus(
                         streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
                         decryptMetadataLong(new TimeCryptEncryptionBIPlus.TCAuthBICiphertext(
                                         encryptedMetadata.getPayloadAsBigInteger(), encryptedMetadata.getMacAsBigInteger())
-                                , chunkIdFrom, chunkIdTo, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
             default:
-                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption schema " +
+                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption scheme " +
                         encryptedMetadata);
         }
     }
@@ -70,7 +77,7 @@ public class MetaDataFactory {
      */
     public static EncryptedMetadata mergeEncyptedMetadata(EncryptedMetadata one, EncryptedMetadata two) {
 
-        if (!one.getEncryptionSchema().equals(two.getEncryptionSchema())) {
+        if (!one.getEncryptionScheme().equals(two.getEncryptionScheme())) {
             throw new RuntimeException("Tried to merge two meta data items of different kind! One: " + one + " Two: "
                     + two);
         }
@@ -79,23 +86,23 @@ public class MetaDataFactory {
             throw new RuntimeException("Tried to merge two meta data items of different ID! One: " + one + " Two: "
                     + two);
         }
-        switch (one.getEncryptionSchema()) {
+        switch (one.getEncryptionScheme()) {
             case LONG:
                 return new EncryptedMetadata(one.getPayloadAsLong() + two.getPayloadAsLong(),
-                        one.getMetadataId(), one.getEncryptionSchema());
+                        one.getMetadataId(), one.getEncryptionScheme());
             case LONG_MAC:
                 return new EncryptedMetadata(one.getPayloadAsLong() + two.getPayloadAsLong(),
                         one.getMacAsBigInteger().add(two.getMacAsBigInteger()),
-                        one.getMetadataId(), one.getEncryptionSchema());
+                        one.getMetadataId(), one.getEncryptionScheme());
             case BIG_INT_128:
                 return new EncryptedMetadata(one.getPayloadAsBigInteger().add(two.getPayloadAsBigInteger()),
-                        one.getMetadataId(), one.getEncryptionSchema());
+                        one.getMetadataId(), one.getEncryptionScheme());
             case BIG_INT_128_MAC:
                 return new EncryptedMetadata(one.getPayloadAsBigInteger().add(two.getPayloadAsBigInteger()),
                         one.getMacAsBigInteger().add(two.getMacAsBigInteger()),
-                        one.getMetadataId(), one.getEncryptionSchema());
+                        one.getMetadataId(), one.getEncryptionScheme());
             default:
-                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption schema");
+                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption scheme");
         }
 
     }
@@ -103,30 +110,39 @@ public class MetaDataFactory {
 
     public static EncryptedMetadata getEncryptedMetadataForValue(StreamMetaData metadata, Collection<DataPoint> value,
                                                                  StreamKeyManager streamKeyManager, long chunkId) {
-
-        switch (metadata.getEncryptionSchema()) {
+        EncryptedMetadata encryptedMetadata;
+                LOGGER.debug("starting to encrypt metadata " + metadata.getId() + " in " + chunkId);
+        switch (metadata.getEncryptionScheme()) {
             case LONG:
-                return new EncryptedMetadata(new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).
+                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).
                         encryptMetadata(metadata.calculate(value), chunkId, metadata.getId()), metadata.getId(),
-                        metadata.getEncryptionSchema());
+                        metadata.getEncryptionScheme());
+                LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
+                return encryptedMetadata;
             case LONG_MAC:
                 TimeCryptEncryptionLongPlus.TCAuthLongCiphertext ciphertext = new TimeCryptEncryptionLongPlus(
                         streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger())
                         .encryptMetadata(metadata.calculate(value), chunkId, metadata.getId());
-                return new EncryptedMetadata(ciphertext.ciphertext, ciphertext.authCode, metadata.getId(),
-                        metadata.getEncryptionSchema());
+                encryptedMetadata = new EncryptedMetadata(ciphertext.ciphertext, ciphertext.authCode, metadata.getId(),
+                        metadata.getEncryptionScheme());
+                LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
+                return encryptedMetadata;
             case BIG_INT_128:
-                return new EncryptedMetadata(new TimeCryptEncryptionBI(streamKeyManager.getChunkKeyRegression(),
+                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionBI(streamKeyManager.getChunkKeyRegression(),
                         128).encryptMetadata(BigInteger.valueOf(metadata.calculate(value)), chunkId,
-                        metadata.getId()), metadata.getId(), metadata.getEncryptionSchema());
+                        metadata.getId()), metadata.getId(), metadata.getEncryptionScheme());
+                LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
+                return encryptedMetadata;
             case BIG_INT_128_MAC:
                 TimeCryptEncryptionBIPlus.TCAuthBICiphertext ciphertextBi = new TimeCryptEncryptionBIPlus(
                         streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
                         encryptMetadata(BigInteger.valueOf(metadata.calculate(value)), chunkId, metadata.getId());
-                return new EncryptedMetadata(ciphertextBi.ciphertext, ciphertextBi.authCode, metadata.getId(),
-                        metadata.getEncryptionSchema());
+                encryptedMetadata = new EncryptedMetadata(ciphertextBi.ciphertext, ciphertextBi.authCode, metadata.getId(),
+                        metadata.getEncryptionScheme());
+                LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
+                return encryptedMetadata;
             default:
-                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption schema");
+                throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption scheme");
         }
     }
 }

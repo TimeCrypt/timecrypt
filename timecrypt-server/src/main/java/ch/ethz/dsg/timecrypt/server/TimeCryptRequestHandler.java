@@ -9,7 +9,7 @@ import ch.ethz.dsg.timecrypt.crypto.CryptoContentFactory;
 import ch.ethz.dsg.timecrypt.index.Chunk;
 import ch.ethz.dsg.timecrypt.exceptions.TimeCryptRequestException;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
-import ch.ethz.dsg.timecrypt.protocol.TimeCryptProtocol.*;
+import ch.ethz.dsg.timecrypt.protocol.TimeCryptNettyProtocol.*;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.slf4j.Logger;
@@ -19,9 +19,9 @@ public class TimeCryptRequestHandler extends SimpleChannelInboundHandler<Request
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TimeCryptRequestHandler.class);
 
-    private TimeCryptRequestManager manager;
+    private NettyRequestManager manager;
 
-    public TimeCryptRequestHandler(TimeCryptRequestManager manager) {
+    public TimeCryptRequestHandler(NettyRequestManager manager) {
         super();
         this.manager = manager;
     }

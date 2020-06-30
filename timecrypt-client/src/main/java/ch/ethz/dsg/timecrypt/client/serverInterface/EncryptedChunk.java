@@ -8,6 +8,9 @@ package ch.ethz.dsg.timecrypt.client.serverInterface;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.commons.codec.binary.Hex;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * The transport representation of a chunk that summarizes several data points.
  * <p>
@@ -61,6 +64,23 @@ public class EncryptedChunk {
      */
     public long getStreamId() {
         return streamId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EncryptedChunk that = (EncryptedChunk) o;
+        return streamId == that.streamId &&
+                chunkId == that.chunkId &&
+                Arrays.equals(payload, that.payload);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(streamId, chunkId);
+        result = 31 * result + Arrays.hashCode(payload);
+        return result;
     }
 
     @Override

@@ -9,14 +9,14 @@ import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
 
 import java.math.BigInteger;
 
-public class TwoBigintMACNodeContent extends BigintNodeContent {
+public class BigintMacNodeContent extends BigintNodeContent {
 
     public static final BigInteger PRIME = new BigInteger("340282366920938463463374607431768211297");
 
     private BigInteger mac;
 
 
-    public TwoBigintMACNodeContent(BigInteger content, BigInteger mac) {
+    public BigintMacNodeContent(BigInteger content, BigInteger mac) {
         super(content);
         this.mac = mac;
     }
@@ -26,7 +26,7 @@ public class TwoBigintMACNodeContent extends BigintNodeContent {
         byte[] macBytes = new byte[data.length - contentBytes.length - 2];
         System.arraycopy(data, 2, contentBytes, 0, contentBytes.length);
         System.arraycopy(data, 2 + contentBytes.length, macBytes, 0, macBytes.length);
-        return new TwoBigintMACNodeContent(new BigInteger(1, contentBytes), new BigInteger(1, macBytes));
+        return new BigintMacNodeContent(new BigInteger(1, contentBytes), new BigInteger(1, macBytes));
     }
 
     public BigInteger getMac() {
@@ -35,16 +35,16 @@ public class TwoBigintMACNodeContent extends BigintNodeContent {
 
     @Override
     public NodeContent copy() {
-        return new TwoBigintMACNodeContent(this.content, this.mac);
+        return new BigintMacNodeContent(this.content, this.mac);
     }
 
     @Override
     public void mergeOther(NodeContent otherContent) {
         super.mergeOther(otherContent);
-        if (!(otherContent instanceof TwoBigintMACNodeContent))
+        if (!(otherContent instanceof BigintMacNodeContent))
             throw new RuntimeException("Merge Failed, inconsistent Node Contents");
         //this.mac = this.mac.add(((CastellucciaMACNodeContent) otherContent).mac).mod(PRIME);
-        this.mac = this.mac.add(((TwoBigintMACNodeContent) otherContent).mac);
+        this.mac = this.mac.add(((BigintMacNodeContent) otherContent).mac);
     }
 
     @Override
@@ -61,7 +61,7 @@ public class TwoBigintMACNodeContent extends BigintNodeContent {
 
     @Override
     public NodeContent createEmpty() {
-        return new TwoBigintMACNodeContent(BigInteger.ZERO, BigInteger.ZERO);
+        return new BigintMacNodeContent(BigInteger.ZERO, BigInteger.ZERO);
     }
 
     @Override

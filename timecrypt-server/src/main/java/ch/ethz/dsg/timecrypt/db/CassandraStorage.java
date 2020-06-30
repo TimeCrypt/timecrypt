@@ -8,16 +8,17 @@ package ch.ethz.dsg.timecrypt.db;
 import ch.ethz.dsg.timecrypt.exceptions.TimeCryptStorageException;
 import ch.ethz.dsg.timecrypt.index.Chunk;
 import ch.ethz.dsg.timecrypt.index.IStorage;
-import com.datastax.driver.core.ResultSetFuture;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 
 public class CassandraStorage implements IStorage {
 
-    private CassandraDatabaseManager man;
+    private CassandraDatabaseManager databaseManager;
 
-    public CassandraStorage(CassandraDatabaseManager man) {
-        this.man = man;
+    public CassandraStorage(CassandraDatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
     }
 
     @Override
@@ -30,10 +31,10 @@ public class CassandraStorage implements IStorage {
 
     @Override
     public List<Chunk> getChunks(long uid, String owner, int from, int to) throws TimeCryptStorageException {
-        List<Chunk> chunks = null;
+        List<Chunk> chunks;
         try {
-            ResultSetFuture res = man.loadChunks(owner, uid, from, to);
-            chunks = man.getChunks(res);
+            CompletionStage<AsyncResultSet> res = databaseManager.loadChunks(owner, uid, from, to);
+            chunks = databaseManager.getChunks(res);
         } catch (Exception e) {
             throw new TimeCryptStorageException(e.getMessage(), 1);
         }
@@ -46,7 +47,8 @@ public class CassandraStorage implements IStorage {
     @Override
     public boolean putChunk(long uid, String owner, Chunk chunk) throws TimeCryptStorageException {
         try {
-            ResultSetFuture res = man.insertChunk(owner, uid, chunk); // TODO: should check for success or async
+            // TODO: should check for success or async
+            CompletionStage<AsyncResultSet> res = databaseManager.insertChunk(owner, uid, chunk);
         } catch (Exception e) {
             throw new TimeCryptStorageException(e.getMessage(), 1);
         }
@@ -62,7 +64,7 @@ public class CassandraStorage implements IStorage {
     @Override
     public boolean deleteALL(long uid, String owner) throws TimeCryptStorageException {
         try {
-            ResultSetFuture res = man.deleteAllChunksFor(owner, uid);
+            CompletionStage<AsyncResultSet> res = databaseManager.deleteAllChunksFor(owner, uid);
         } catch (Exception e) {
             throw new TimeCryptStorageException(e.getMessage(), 1);
         }

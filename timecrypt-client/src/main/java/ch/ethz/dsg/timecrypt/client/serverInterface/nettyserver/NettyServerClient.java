@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
  */
 
-package ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver;
+package ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer;
 
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotReceiveException;
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotStoreException;
@@ -28,7 +28,7 @@ public class NettyServerClient implements ServerInterface {
     private static final Logger LOGGER = LoggerFactory.getLogger(NettyServerClient.class);
     private final String ip;
     private final int port;
-    private BasicClient client;
+    private NettyClient client;
     private Random rand = new Random();
 
     public NettyServerClient(String ip, int port) throws IOException {
@@ -38,7 +38,7 @@ public class NettyServerClient implements ServerInterface {
     }
 
     private void createNewConnection() throws IOException {
-        client = new BasicClient(ip, port);
+        client = new NettyClient(ip, port);
     }
 
     @Override

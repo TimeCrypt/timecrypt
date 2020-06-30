@@ -5,7 +5,9 @@
 
 package ch.ethz.dsg.timecrypt.client.serverInterface;
 
-import ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver.NettyServerClient;
+import ch.ethz.dsg.timecrypt.client.serverInterface.grpcServer.GrpcServerClient;
+import ch.ethz.dsg.timecrypt.client.serverInterface.mockServer.MockServerInterface;
+import ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer.NettyServerClient;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptProfile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 
-import static ch.ethz.dsg.timecrypt.client.serverInterface.MockServerInterface.getMockServerInterface;
+import static ch.ethz.dsg.timecrypt.client.serverInterface.mockServer.MockServerInterface.getMockServerInterface;
 
 /**
  * Allows to return different server interfaces based on some configuration.
@@ -31,7 +33,7 @@ public class ServerInterfaceFactory {
         String implementation = System.getenv(SERVER_INTERFACE_ENVIRONMENT_VARIABLE);
 
         if (implementation == null) {
-            interfaceProvider = InterfaceProvider.NETTY_SERVER_INTERFACE;
+            interfaceProvider = InterfaceProvider.GRPC_SERVER_INTERFACE;
             defaultProvider = true;
         } else {
             LOGGER.info("Using the value from environment variable " + SERVER_INTERFACE_ENVIRONMENT_VARIABLE +
@@ -45,7 +47,7 @@ public class ServerInterfaceFactory {
             }
 
             if (interfaceProvider == null) {
-                interfaceProvider = InterfaceProvider.NETTY_SERVER_INTERFACE;
+                interfaceProvider = InterfaceProvider.GRPC_SERVER_INTERFACE;
                 LOGGER.error("Could not identify the right server interface implementation based on the value" +
                         implementation + " for selecting the right server interface. Falling back to " +
                         interfaceProvider.name());
@@ -81,6 +83,8 @@ public class ServerInterfaceFactory {
                         DEFAULT_PERSISTENT_FILE_NAME);
             case IN_MEMORY_MOCK_SERVER_INTERFACE:
                 return new MockServerInterface();
+            case GRPC_SERVER_INTERFACE:
+                return new GrpcServerClient(profile.getServerAddress(), profile.getServerPort());
             case NETTY_SERVER_INTERFACE:
                 return new NettyServerClient(profile.getServerAddress(), profile.getServerPort());
             default:
@@ -88,12 +92,12 @@ public class ServerInterfaceFactory {
         }
     }
 
-
     public enum InterfaceProvider {
 
         IN_MEMORY_MOCK_SERVER_INTERFACE("IN_MEMORY_MOCK_SERVER_INTERFACE"),
         PERSISTENT_MOCK_SERVER_INTERFACE("PERSISTENT_MOCK_SERVER_INTERFACE"),
         NETTY_SERVER_INTERFACE("NETTY_SERVER_INTERFACE"),
+        GRPC_SERVER_INTERFACE("GRPC_SERVER_INTERFACE"),
         ;
 
         private final String explanation;

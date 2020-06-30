@@ -2,7 +2,7 @@ syntax = "proto2";
 
 package ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver;
 
-option java_package = "ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver";
+option java_package = "ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer";
 option java_outer_classname = "TimeCryptNettyProtocol";
 
 

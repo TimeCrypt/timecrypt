@@ -8,7 +8,7 @@ package ch.ethz.dsg.timecrypt;
 import ch.ethz.dsg.timecrypt.crypto.CryptoContentFactory;
 import ch.ethz.dsg.timecrypt.index.Chunk;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
-import ch.ethz.dsg.timecrypt.protocol.TimeCryptProtocol.*;
+import ch.ethz.dsg.timecrypt.protocol.TimeCryptNettyProtocol.*;
 import com.google.protobuf.ByteString;
 
 import java.io.Closeable;

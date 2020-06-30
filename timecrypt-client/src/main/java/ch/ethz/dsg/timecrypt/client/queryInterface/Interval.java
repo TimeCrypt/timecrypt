@@ -5,7 +5,9 @@
 
 package ch.ethz.dsg.timecrypt.client.queryInterface;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Represents the result of a query in a certain time interval.
@@ -16,7 +18,7 @@ public class Interval {
 
     private final Date from;
     private final Date to;
-    private final Double value;
+    private final List<Double> values;
 
     /**
      * Constructor that operates on dates.
@@ -28,7 +30,8 @@ public class Interval {
     public Interval(Date from, Date to, double value) {
         this.from = from;
         this.to = to;
-        this.value = value;
+        this.values = new ArrayList<>();
+        this.values.add(value);
     }
 
     /**
@@ -41,8 +44,37 @@ public class Interval {
     public Interval(long from, long to, Double value) {
         this.from = new Date(from);
         this.to = new Date(to);
-        this.value = value;
+        this.values = new ArrayList<>();
+        if (value != null)
+            this.values.add(value);
     }
+
+    /**
+     * Constructor that operates on epoch millis.
+     *
+     * @param from  The start of the interval in epoch millis.
+     * @param to    The end of the interval in epoch millis.
+     * @param values The values in the interval.
+     */
+    public Interval(long from, long to, List<Double> values) {
+        this.from = new Date(from);
+        this.to = new Date(to);
+        this.values = values;
+    }
+
+    /**
+     * Constructor that operates on epoch millis.
+     *
+     * @param from  The start of the interval in epoch millis.
+     * @param to    The end of the interval in epoch millis.
+     * @param values The values in the interval.
+     */
+    public Interval(Date from, Date to, List<Double> values) {
+        this.from = from;
+        this.to = to;;
+        this.values = values;
+    }
+
 
     public Date getFrom() {
         return from;
@@ -53,7 +85,11 @@ public class Interval {
     }
 
     public Double getValue() {
-        return value;
+        return values.get(0);
+    }
+
+    public Double getValueAt(int i) {
+        return values.get(i);
     }
 
     /**
@@ -62,7 +98,7 @@ public class Interval {
      * @return True if there is no value in this interval. False if there are value.
      */
     public boolean isEmpty() {
-        return value == null;
+        return values.size() == 0;
     }
 
     @Override
@@ -70,7 +106,7 @@ public class Interval {
         return "Interval{" +
                 "from=" + from +
                 ", to=" + to +
-                ", value=" + value +
+                ", value=" + values.toString() +
                 '}';
     }
 }

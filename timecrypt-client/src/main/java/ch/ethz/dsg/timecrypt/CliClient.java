@@ -23,7 +23,6 @@ import org.beryx.textio.TextTerminal;
 import org.beryx.textio.system.SystemTextTerminal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import picocli.CommandLine;
 
 import java.io.File;
 import java.io.IOException;
@@ -562,7 +561,7 @@ public class CliClient {
             terminal.println("  LastWrittenChunkId: " + stream.getLastWrittenChunkId());
             terminal.println("  MetaData: ");
             for (StreamMetaData metaData : stream.getMetaData()) {
-                terminal.printf("   * %s - %s \n", metaData.getType(), metaData.getEncryptionSchema());
+                terminal.printf("   * %s - %s \n", metaData.getType(), metaData.getEncryptionScheme());
             }
 
             terminal.println("  Sharing resolution levels: ");
@@ -627,9 +626,9 @@ public class CliClient {
         terminal.println("");
 
         terminal.println();
-        StreamMetaData.MetadataEncryptionSchema encryptionSchema = textIO.newEnumInputReader(StreamMetaData.MetadataEncryptionSchema.class)
-                .withDefaultValue(StreamMetaData.MetadataEncryptionSchema.LONG)
-                .read("Stream meta data (digest) encryption schema");
+        StreamMetaData.MetadataEncryptionScheme encryptionScheme = textIO.newEnumInputReader(StreamMetaData.MetadataEncryptionScheme.class)
+                .withDefaultValue(StreamMetaData.MetadataEncryptionScheme.LONG)
+                .read("Stream meta data (digest) encryption scheme");
 
         List<StreamMetaData.MetadataType> possibleMetadata = new ArrayList<>(Arrays.asList(StreamMetaData.MetadataType.values()));
 
@@ -662,7 +661,7 @@ public class CliClient {
         try {
 
             streamID = timeCryptClient.createStream(name, description, precision, resolutionLevels, metaDataTypes,
-                    encryptionSchema, CliHelper.CONFIG_FOLDER + File.separator + profile.getProfileName() +
+                    encryptionScheme, CliHelper.CONFIG_FOLDER + File.separator + profile.getProfileName() +
                             "_" + name + CliHelper.DEFAULT_CHUNK_STORE_FILE_ENDING);
         } catch (Exception e) {
             terminal.printf("... could not create stream: " + e.getMessage());

@@ -45,9 +45,9 @@ public class ChunkTest {
         stream = new Stream(1L, "Test Stream", "Stream for testing", TimeUtil.Precision.ONE_SECOND,
                 Arrays.asList(TimeUtil.Precision.TEN_SECONDS, TimeUtil.Precision.ONE_MINUTE), Arrays.asList(
                 MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                        StreamMetaData.MetadataEncryptionSchema.LONG),
+                        StreamMetaData.MetadataEncryptionScheme.LONG),
                 MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.SUM,
-                        StreamMetaData.MetadataEncryptionSchema.LONG)), null);
+                        StreamMetaData.MetadataEncryptionScheme.LONG)), null);
     }
 
     @AfterAll

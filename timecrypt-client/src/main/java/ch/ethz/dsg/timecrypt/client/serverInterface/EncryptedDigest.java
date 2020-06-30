@@ -8,6 +8,7 @@ package ch.ethz.dsg.timecrypt.client.serverInterface;
 import com.fasterxml.jackson.annotation.JsonCreator;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The transport representation of a digest.
@@ -19,10 +20,10 @@ import java.util.List;
  */
 public class EncryptedDigest {
 
-    final long streamId;
-    final long chunkIdFrom;
-    final long chunkIdTo;
-    final List<EncryptedMetadata> payload;
+    private final long streamId;
+    private final long chunkIdFrom;
+    private final long chunkIdTo;
+    private final List<EncryptedMetadata> payload;
 
     /**
      * Create a new encrypted digest.
@@ -67,6 +68,22 @@ public class EncryptedDigest {
      */
     public List<EncryptedMetadata> getPayload() {
         return payload;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EncryptedDigest that = (EncryptedDigest) o;
+        return streamId == that.streamId &&
+                chunkIdFrom == that.chunkIdFrom &&
+                chunkIdTo == that.chunkIdTo &&
+                Objects.equals(payload, that.payload);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(streamId, chunkIdFrom, chunkIdTo, payload);
     }
 
     @Override

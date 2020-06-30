@@ -106,40 +106,67 @@ public class Query {
     public static Interval performQuery(Stream stream, StreamKeyManager streamKeyManager, ServerInterface serverInterface,
                                         Date from, Date to, SupportedOperation queryOp, boolean allowChunkScan)
             throws InvalidQueryIntervalException, InvalidQueryException, QueryNeedsChunkScanException, QueryFailedException {
+        return performQuery(stream, streamKeyManager, serverInterface, from, to, Collections.singletonList(queryOp), allowChunkScan);
+    }
+
+    /**
+     * Perform a query on a stream. Returning the result as one scalar for the complete range.
+     *
+     * @param stream           The stream that the query should be executed on.
+     * @param streamKeyManager The key manager of the stream to query.
+     * @param serverInterface  The server to perform the query on.
+     * @param from             The start time of the query the query. Results will INCLUDE values at this exact timestamp.
+     * @param to               The end time of the query the query. Results will EXCLUDE values at this exact timestamp.
+     * @param queryOps          The kind of querys to execute.
+     * @param allowChunkScan   Should the query be performed on the individual chunks rather than the aggregation
+     *                         indexes if there are no values in the aggregation indexes?
+     * @return An interval object with the query result.
+     */
+    public static Interval performQuery(Stream stream, StreamKeyManager streamKeyManager, ServerInterface serverInterface,
+                                        Date from, Date to, List<SupportedOperation> queryOps, boolean allowChunkScan)
+            throws InvalidQueryIntervalException, InvalidQueryException, QueryNeedsChunkScanException, QueryFailedException {
 
         checkFromSmallerThanTo(from, to);
         Query query = checkEndDate(stream, to, allowChunkScan, checkStartDate(stream, from, allowChunkScan, new Query(stream)));
 
-        Calculation calculation = getCalculation(queryOp);
-        query = calculation.configureQuery(stream, allowChunkScan, query);
+        List<Calculation> calculations = new ArrayList<>(queryOps.size());
+        for (SupportedOperation queryOp : queryOps) {
+            Calculation calculation = getCalculation(queryOp);
+            calculations.add(calculation);
+            query = calculation.configureQuery(stream, allowChunkScan, query);
+        }
 
         query.setDigestPrecision(query.digestTo - query.digestFrom);
 
         query.fetchData(serverInterface, streamKeyManager);
 
-        double result;
-        if (query.isChunkScan()) {
-            if (query.isSubChunkQuery()) {
-                // Assuming that the insertion did not allow duplicate values
-                result = calculation.performOnDataPoints(getSubChunkDataPoints(from, to, query));
+        List<Double> results = new ArrayList<>(queryOps.size());
+        for (Calculation calculation : calculations) {
+            double result;
+            if (query.isChunkScan()) {
+                if (query.isSubChunkQuery()) {
+                    // Assuming that the insertion did not allow duplicate values
+                    result = calculation.performOnDataPoints(getSubChunkDataPoints(from, to, query));
+                } else {
+                    result = calculation.performOnDataPoints(query.getDataPoints());
+                }
+            } else if (query.isMixedResult()) {
+                if (query.isSubChunkQuery()) {
+                    result = calculation.performOnMixed(query.getDigests(), getSubChunkDataPoints(from, to, query));
+                } else {
+                    throw new QueryFailedException(QueryFailedException.FailReason.INTERNAL_ERROR, "Simple query with " +
+                            "mixed results but without sub-chunk results should never occur.");
+                }
             } else {
-                result = calculation.performOnDataPoints(query.getDataPoints());
+                if (query.isSubChunkQuery()) {
+                    throw new QueryFailedException(QueryFailedException.FailReason.INTERNAL_ERROR, "Simple query with " +
+                            "sub-chunk results but neither chunk scan nor mixed results should never occur.");
+                }
+                result = calculation.performOnDigests(query.getDigests());
             }
-        } else if (query.isMixedResult()) {
-            if (query.isSubChunkQuery()) {
-                result = calculation.performOnMixed(query.getDigests(), getSubChunkDataPoints(from, to, query));
-            } else {
-                throw new QueryFailedException(QueryFailedException.FailReason.INTERNAL_ERROR, "Simple query with " +
-                        "mixed results but without sub-chunk results should never occur.");
-            }
-        } else {
-            if (query.isSubChunkQuery()) {
-                throw new QueryFailedException(QueryFailedException.FailReason.INTERNAL_ERROR, "Simple query with " +
-                        "sub-chunk results but neither chunk scan nor mixed results should never occur.");
-            }
-            result = calculation.performOnDigests(query.getDigests());
+            results.add(result);
         }
-        return new Interval(from, to, result);
+        return new Interval(from, to, results);
     }
 
     private static List<DataPoint> getSubChunkDataPoints(Date from, Date to, Query query) {
@@ -196,22 +223,52 @@ public class Query {
     public static List<Interval> performQueryForRange(Stream stream, StreamKeyManager streamKeyManager, ServerInterface
             serverInterface, Date from, Date to, SupportedOperation queryOp, long precision, boolean allowChunkScan)
             throws InvalidQueryIntervalException, InvalidQueryException, QueryNeedsChunkScanException, QueryFailedException {
+        return  performQueryForRange(stream, streamKeyManager, serverInterface, from, to,
+                Collections.singletonList(queryOp), precision, allowChunkScan);
+    }
+
+    /**
+     * Perform a query on a stream. Returning the result as vector of results for several partial intervals.
+     * The query flow is roughly:
+     * - some sanitation (do the times align with the precision of the stream, etc
+     * - ask the calculation what kind of data it needs (raw chunks, meta data in digests)
+     * - fetch the requested items from the server
+     * - calculate the values on every interval
+     *
+     * @param stream           The stream that the query should be executed on.
+     * @param streamKeyManager The key manager of the stream to query.
+     * @param serverInterface  The server to perform the query on.
+     * @param from             The start time of the query the query. Results will INCLUDE values at this exact timestamp.
+     * @param to               The end time of the query the query. Results will EXCLUDE values at this exact timestamp.
+     * @param queryOps         The kind of queries to execute.
+     * @param precision        The size of the partial intervals.
+     * @param allowChunkScan   Should the query be performed on the individual chunks rather than the aggregation
+     *                         indexes if there are no values in the aggregation indexes?
+     * @return An interval object with the query result.
+     */
+    public static List<Interval> performQueryForRange(Stream stream, StreamKeyManager streamKeyManager, ServerInterface
+            serverInterface, Date from, Date to, List<SupportedOperation> queryOps, long precision, boolean allowChunkScan)
+            throws InvalidQueryIntervalException, InvalidQueryException, QueryNeedsChunkScanException, QueryFailedException {
 
         checkFromSmallerThanTo(from, to);
         Query query = checkEndDate(stream, to, allowChunkScan, checkStartDate(stream, from, allowChunkScan, new Query(stream)));
 
-        Calculation calculation = getCalculation(queryOp);
-        query = calculation.configureQuery(stream, allowChunkScan, query);
+        List<Calculation> calculations = new ArrayList<>(queryOps.size());
+        for (SupportedOperation queryOp : queryOps) {
+            Calculation calculation = getCalculation(queryOp);
+            calculations.add(calculation);
+            query = calculation.configureQuery(stream, allowChunkScan, query);
+        }
 
         if (!allowChunkScan && (precision < stream.getChunkSize())) {
             throw new InvalidQueryException(InvalidQueryException.InvalidReason.PRECISION_HIGHER_THAN_STREAM_PRECISION,
                     "Requested precision is " + precision +
                             " but stream precision is " + stream.getChunkSize());
-        } else if (to.getTime() - from.getTime() % precision != 0) {
+        } else if ((to.getTime() - from.getTime()) % precision != 0) {
 
             // if chunk scans are disallowed it is already guaranteed that the precision is a multiple of the chunk size
             // therefore the calculations will result in valid chunks again.
-            long delta = to.getTime() - from.getTime() % precision;
+            long delta = (to.getTime() - from.getTime()) % precision;
             long next = precision - delta;
             throw new InvalidQueryIntervalException("The requested precision does not partition the requested " +
                     "interval. Change either start or end date", new Date(from.getTime() - delta),
@@ -242,7 +299,11 @@ public class Query {
                 while (dataPoints.peek() != null && dataPoints.peek().getTimestamp().getTime() < top) {
                     currentDataPoints.add(dataPoints.poll());
                 }
-                result.add(new Interval(i, top - 1, calculation.performOnDataPoints(currentDataPoints)));
+                List<Double> res = new ArrayList<>(queryOps.size());
+                for (Calculation calculation : calculations) {
+                    res.add(calculation.performOnDataPoints(currentDataPoints));
+                }
+                result.add(new Interval(i, top - 1, res));
 
             }
         } else if (query.isMixedResult()) {
@@ -255,23 +316,26 @@ public class Query {
                         "chunk scan should never be a subChunkQuery. ");
             }
 
-            Queue<Digest> digests = new PriorityQueue<>(query.getDigests());
+            Iterator<Digest> digests = query.getDigests().iterator();
 
-            for (long i = query.getDigestFrom(); i < query.getDigestTo() + 1; i = TimeUtil.getChunkIdAtTime(stream,
+            for (long i = query.getDigestFrom(); i < query.getDigestTo(); i = TimeUtil.getChunkIdAtTime(stream,
                     TimeUtil.getChunkStartTime(stream, i) + precision)) {
 
                 // TODO given enough tests this might be removed - for now it's only sanitizing what the server send
-                Digest peek = digests.peek();
+                Digest peek = digests.next();
                 if (peek != null) {
                     if (peek.getChunkIdFrom() != i || peek.getChunkIdTo() !=
                             TimeUtil.getChunkIdAtTime(stream, TimeUtil.getChunkStartTime(stream, i) +
-                                    precision - 1)) {
+                                    precision)) {
                         throw new QueryFailedException(QueryFailedException.FailReason.INTERNAL_ERROR, "The digest send" +
                                 "by the server does not align with the expected query interval.");
                     }
                 }
-                result.add(new Interval(TimeUtil.getChunkStartTime(stream, i), TimeUtil.getChunkEndTime(stream, i),
-                        calculation.performOnDigests(Collections.singletonList(digests.poll()))));
+                List<Double> res = new ArrayList<>(queryOps.size());
+                for (Calculation calculation : calculations) {
+                    res.add(calculation.performOnDigests(Collections.singletonList(peek)));
+                }
+                result.add(new Interval(TimeUtil.getChunkStartTime(stream, i), TimeUtil.getChunkEndTime(stream, i), res));
             }
         }
         return result;
@@ -372,11 +436,15 @@ public class Query {
             case SUM:
                 return new SumCalculation();
             case MAX:
-                return new MinMaxCalculation(true);
+                return new ExactMinMaxCalculation(true);
             case MIN:
-                return new MinMaxCalculation(false);
+                return new ExactMinMaxCalculation(false);
             case COUNT:
                 return new CountCalculation();
+            case VAR:
+                return new VarianceCalculation();
+            case STD:
+                return new StdCalculation();
             default:
                 throw new InvalidQueryException(InvalidQueryException.InvalidReason.UNSUPPORTED_OPERATION,
                         "Requested Operation was " + operation);
@@ -384,7 +452,7 @@ public class Query {
 
     }
 
-    public boolean isSubChunkQuery() {
+    private boolean isSubChunkQuery() {
         return subChunkQuery;
     }
 
@@ -471,7 +539,7 @@ public class Query {
         this.aggregationNumber = l;
     }
 
-    private void activateChunkScan() {
+    public void activateChunkScan() {
         this.chunkScan = true;
     }
 
@@ -500,7 +568,8 @@ public class Query {
     }
 
     public void addNeededMetaData(StreamMetaData neededMetaData) {
-        this.neededMetaData.add(neededMetaData);
+        if (!this.neededMetaData.contains(neededMetaData))
+            this.neededMetaData.add(neededMetaData);
     }
 
     private boolean isChunkScan() {
@@ -508,6 +577,6 @@ public class Query {
     }
 
     public enum SupportedOperation {
-        AVG, COUNT, SUM, NULLABLE_SUM, MIN, MAX
+        AVG, COUNT, SUM, NULLABLE_SUM, MIN, MAX, VAR, STD
     }
 }

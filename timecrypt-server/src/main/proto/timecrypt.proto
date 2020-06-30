@@ -1,145 +1,202 @@
-syntax = "proto2";
+/*
+ * Copyright (c) ETH Zurich 2020.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS,  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ *
+ */
+syntax = "proto3";
 
 package ch.ethz.dsg.timecrypt.protocol;
 
 option java_package = "ch.ethz.dsg.timecrypt.protocol";
+option java_multiple_files = true;
 option java_outer_classname = "TimeCryptProtocol";
 
+// import "google/protobuf/timestamp.proto";
+// import "google/rpc/status.proto";
 
-enum MessageRequestType {
-    CREATE_STREAM = 0;
-    DELETE_STREAM = 1;
-    GET_CHUNKS = 2;
-    INSERT_CHUNK = 3;
-    GET_STATISTICS = 5;
-    GET_METAINFO = 6;
-    GET_MULTI = 7;
+/*
+ *  Functions in paper:
+ *  (1) CreateStream(uuid, [config])
+ *      Create a new stream, config defines parameters, e.g., chunk interval, operators.
+ *  (2) DeleteStream(uuid)
+ *      Delete specified stream with all associated data.
+ *  (3) RollupStream(uuid, res, [T_s , T_e ])
+ *      Rollup an existing stream or a segment of it to the specified resolution.
+ *  (4) InsertRecord(uuid, [t, val])
+ *      Serialize data points in a chunk and append to the end of the stream.
+ *  (5) GetRange(uuid, T_s , T_e )
+ *      Retrieve all data records within the specified time interval.
+ *  (6) GetStatRange([uuid], T_s , T_e , resolution, [operators])
+ *      Retrieve statistics for the given time interval and resolution, default [sum, count, mean, var, freq].
+ *  (7) DeleteRange(uuid, start, end)
+ *      Delete specified segment of the stream, while maintaining per-chunk digest.
+ *  (8) GrantViewAccess(viewid, [princ-id])
+ *      Grant access to an existing View.
+ *  (9) CreateView(viewid, [policy])
+ *      Create a View with the given policy in JSON format.
+ *  (10) CheckView(viewid, princ-id)
+ *       Retrieve a View token.
+ *
+ * This proto differs a bit from the functions in the paper for ease of implementation.
+ */
+
+service Timecrypt {
+    // Create a new stream defines the configuration of its associated MetaData
+    rpc createStream (streamMessage) returns (streamId);
+    // Delete specified stream with all associated data.
+    rpc deleteStream (streamId) returns (Empty);
+    // Add a chunk (and its corresponding metadata digest) to the stream. It is only allowed to add the chunk with the
+    // next chunk id.
+    rpc insertChunk (chunkCreationMessage) returns (chunkId);
+    // returns the last chunk id that was written
+    rpc getLastWrittenChunk (streamId) returns (chunkId);
+    // Retrieve all chunks within the specified interval.
+    rpc getRawData (chunkRequestMessage) returns (stream chunk);
+    // getStatisticalData returns digests in a given interval statistics may only request subset of metadata
+    rpc getStatisticalData (statisticRequestMessage) returns (stream digest);
+    // Creates a view. A grants access to a stream (of another client) in a certain interval in a certain granularity
+    rpc createView (view) returns (viewId);
+    // Gives another person permission to access a view (i.e. it stores the view key encrypted with the users key
+    // on the server
+    rpc grantView (grantViewMessage) returns (Empty);
+    // Get a view that was encrypted for the client ID from the server
+    rpc retrieveView (viewId) returns (retrieveViewMessage);
 }
 
-message RequestMessage {
-    required MessageRequestType type = 1;
-    oneof request {
-        CreateStream createStream = 2;
-        DeleteStream deleteStream = 3;
-        GetChunks getChunks = 4;
-        InsertChunk insertChunk = 5;
-        GetStatistics getStatistics = 6;
-        GetMetaConfiguration getMetaConfig = 7;
-        GetStatisticsMulti getStatisticsMulti = 8;
+enum EncryptionSchema {
+    PLAIN = 0;
+    LONG = 1;
+    LONG_MAC = 2;
+    BIG_INT = 3;
+    BIG_INT_MAC = 4;
+}
+
+message Empty {
+}
+
+message metadataConfig {
+    // number inside the metadata vector - this has to be unique
+    int32 id = 1;
+    EncryptionSchema schema = 2;
+}
+
+message streamMessage {
+    string ownerId = 1;
+    repeated metadataConfig metadataConfig = 2;
+}
+
+message streamId {
+    int64 streamId = 1;
+}
+
+message longPayload {
+    int64 encryptedLong = 1;
+}
+
+message longMacPayload {
+    int64 encryptedLong = 1;
+    bytes authCode = 2;
+    int64 authCodeBits = 3;
+}
+
+message bigIntPayload {
+    bytes encryptedBigInt = 1;
+    int64 bits = 2;
+}
+
+message bigIntMacPayload {
+    bytes encryptedBigInt = 1;
+    int64 bits = 2;
+    bytes authCode = 3;
+    int64 authCodeBits = 4;
+}
+
+message metadataContent {
+    metadataConfig config = 1;
+    // The encrypted payload - encrypted on the client using HEAC
+    oneof payload {
+        longPayload long_payload = 2;
+        longMacPayload long_mac_payload = 3;
+        bigIntPayload big_int_payload = 4;
+        bigIntMacPayload big_int_mac_payload = 5;
     }
 }
 
-message GetMetaConfiguration {
-    required uint64 uid = 1;
-    required string owner = 2;
+message digest {
+    chunkId start = 1;
+    chunkId end = 2;
+    repeated metadataContent metadataContent = 3;
 }
 
-message MetaConfig {
-    required uint32 numdigests = 1;
+message chunk {
+    chunkId chunkId = 1;
+    streamId streamId = 2;
+    // Encrypted on the client using AES
+    bytes chunk_content = 3;
 }
 
-
-message CreateStream {
-    required uint64 uid = 1;
-    required string owner = 2;
-    required MetaConfig metadataConfig = 3;
+// Transmit the chunk meta data during chunk creation
+message chunkCreationMessage {
+    chunk chunk = 1;
+    digest digest = 2;
 }
 
-message DeleteStream {
-    required uint64 uid = 1;
-    required string owner = 2;
+message chunkId {
+    int64 id = 1;
 }
 
-message GetChunks {
-    required uint64 uid = 1;
-    required string owner = 2;
-    required int64 from = 3;
-    required int64 to = 4;
+message view {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
+    int32 granularity = 4;
+    // Encrypted on the client using AES
+    bytes metadata = 5;
+    // Encrypted on the client using AES
+    bytes keys = 6;
 }
 
-
-message InsertChunk {
-    required uint64 uid = 1;
-    required string owner = 2;
-    required int64 from = 3;
-    required int64 to = 4;
-    required int32 key = 5;
-    required bytes chunk = 6;
-    repeated Metadata metadata = 7;
+message viewId {
+    int64 id = 1;
 }
 
-message Metadata {
-    required uint32 digestid = 1;
-    required bytes data = 2;
+message grantViewMessage {
+    viewId viewId = 1;
+    string requesterId = 2;
+    // The AES key of the view encrypted with the private key of the client that is allowed to access the view
+    bytes viewKey = 3;
 }
 
-message GetStatistics {
-    required uint64 uid = 1;
-    required string owner = 2;
-    required int64 from = 3;
-    required int64 to = 4;
-    required int64 granularity = 5;
-    repeated uint32 digestid = 6;
+message retrieveViewMessage {
+    grantViewMessage key = 1;
+    view view = 2;
 }
 
-message GetStatisticsMulti {
-    required uint64 uidFrom = 1;
-    required uint64 uidTo = 2;
-    required string owner = 3;
-    required int64 from = 4;
-    required int64 to = 5;
-    required int64 granularity = 6;
-    repeated uint32 digestid = 7;
+// Requests all chunk - from startChunkId to endChunkId (inclusive the starting and ending chunks)
+// Granularity is the number of chunks that will be added up to return - the granularity level should be a divider of
+// the interval (start - end) that is selected
+// end is exclusive of the chunk
+message statisticRequestMessage {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
+    int32 granularity = 4;
+    repeated metadataConfig metadataConfig = 5;
 }
 
-
-enum MessageResponseType {
-    DATA_RESPONSE = 0;
-    STATISTICS_RESPONSE = 1;
-    ERROR_RESPONSE = 2;
-    SUCCESS_RESPONSE = 3;
-    MULTIRESPONSE = 4;
-    META_CONFIG_RESPONSE = 5;
+// Requests all chunk - from startChunkId to endChunkId (inclusive the starting and ending chunks)
+message chunkRequestMessage {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
 }
 
-
-message ResponseMessage {
-    required MessageResponseType type = 1;
-    oneof request {
-        DataResponse dataResponse = 2;
-        StatisticsResponse statisticsResponse = 3;
-        ErrorResponse errorResponse = 4;
-        SuccessResponse successResponse = 5;
-        MultiDataTransfer multiTransfer = 6;
-        MetaConfigResponse metConfigResponse = 7;
-    }
-}
-
-message MetaConfigResponse {
-    repeated MetaConfig metaConfig = 1;
-}
-
-message MultiDataTransfer {
-    required MessageResponseType messageType = 1;
-    required int32 numTransfers = 2;
-}
-
-message DataResponse {
-    required int32 key = 1;
-    required bytes data = 2;
-}
-
-
-message StatisticsResponse {
-    repeated Metadata data = 1;
-}
-
-message ErrorResponse {
-    required int32 id = 1;
-    required string message = 2;
-}
-
-message SuccessResponse {
-    required int32 id = 1;
-    required string message = 2;
-}

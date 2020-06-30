@@ -31,9 +31,9 @@ public class StreamTest {
         TimeUtil.setClock(someClock);
 
         StreamMetaData countMetadata = MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG);
+                StreamMetaData.MetadataEncryptionScheme.LONG);
         StreamMetaData sumMetadata = MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG);
+                StreamMetaData.MetadataEncryptionScheme.LONG);
 
         Stream stream = new Stream(1L, "Test Stream", "Stream for testing",
                 TimeUtil.Precision.ONE_SECOND,

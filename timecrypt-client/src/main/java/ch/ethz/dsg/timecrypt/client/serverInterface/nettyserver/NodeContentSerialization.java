@@ -3,7 +3,7 @@
  * Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
  */
 
-package ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver;
+package ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer;
 
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
@@ -12,7 +12,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 
-import static ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData.MetadataEncryptionSchema.*;
+import static ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData.MetadataEncryptionScheme.*;
 
 public class NodeContentSerialization {
 
@@ -22,7 +22,7 @@ public class NodeContentSerialization {
     public static final byte NODE_CONTENT_TWO_BIGINT_TYPE = 5;
     public static final byte NODE_CONTENT_LONG_BIGINT_TYPE = 6;
 
-    public static final HashMap<StreamMetaData.MetadataEncryptionSchema, Byte> schemeToNodeContent = new HashMap<>();
+    public static final HashMap<StreamMetaData.MetadataEncryptionScheme, Byte> schemeToNodeContent = new HashMap<>();
 
     static {
         schemeToNodeContent.put(LONG, NODE_CONTENT_LONG_TYPE);
@@ -31,7 +31,7 @@ public class NodeContentSerialization {
         schemeToNodeContent.put(BIG_INT_128_MAC, NODE_CONTENT_TWO_BIGINT_TYPE);
     }
 
-    public static EncryptedMetadata decodeNodeContent(byte[] encodedContent, int id, StreamMetaData.MetadataEncryptionSchema expectedScheme) {
+    public static EncryptedMetadata decodeNodeContent(byte[] encodedContent, int id, StreamMetaData.MetadataEncryptionScheme expectedScheme) {
         if (encodedContent.length < 1)
             throw new RuntimeException("Decode NodeContentFailed");
         switch (expectedScheme) {
@@ -66,7 +66,7 @@ public class NodeContentSerialization {
     }
 
     public static byte[] encodeToNodeContent(EncryptedMetadata metadata) {
-        switch (metadata.getEncryptionSchema()) {
+        switch (metadata.getEncryptionScheme()) {
             case LONG:
                 byte[] temp = new byte[metadata.getPayload().length + 1];
                 temp[0] = schemeToNodeContent.get(LONG);

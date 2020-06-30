@@ -18,3 +18,5 @@ The TimeCrypt server takes several configuration options via Environment variabl
  - `TIMECRYPT_CASSANDRA_PORT`: The Port of your local Cassandra instance (default: 9042)
  - `TIMECRYPT_CASSANDRA_MIN_CONNECTIONS`: The minimum number of Cassandra connections that the TimeCrypt server will open.
  - `TIMECRYPT_CASSANDRA_MAX_CONNECTIONS`:The maximum number of Cassandra connections that the TimeCrypt server will open.
+ - `TIMECRYPT_CASSANDRA_MAX_CONNECTIONS`:The maximum number of Cassandra connections that the TimeCrypt server will open.
+ - `TIMECRYPT_SERVER_INTERFACE`: The implementation of the TimeCrypt server. Can be either: `NETTY_SERVER_INTERFACE` or `GRPC_SERVER_INTERFACE`. The `GRPC_SERVER_INTERFACE` is the default.

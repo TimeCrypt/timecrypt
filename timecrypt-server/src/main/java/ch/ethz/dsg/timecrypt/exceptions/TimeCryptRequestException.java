@@ -5,7 +5,7 @@
 
 package ch.ethz.dsg.timecrypt.exceptions;
 
-import ch.ethz.dsg.timecrypt.protocol.TimeCryptProtocol.ErrorResponse;
+import ch.ethz.dsg.timecrypt.protocol.TimeCryptNettyProtocol.ErrorResponse;
 
 public class TimeCryptRequestException extends RuntimeException {
 

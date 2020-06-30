@@ -5,6 +5,7 @@
 
 package ch.ethz.dsg.timecrypt.db;
 
+import ch.ethz.dsg.timecrypt.exceptions.TimeCryptTreeAlreadyExistsException;
 import ch.ethz.dsg.timecrypt.exceptions.TimeCryptTreeException;
 import ch.ethz.dsg.timecrypt.index.ITreeManager;
 import ch.ethz.dsg.timecrypt.index.UserStreamTree;
@@ -34,10 +35,10 @@ public class CassandraTreeManager implements ITreeManager {
         UserStreamTree result = null;
         try {
             if (blockTree.treeExistsInCache(uid, user))
-                throw new TimeCryptTreeException("Stream already exists.", 1);
+                throw new TimeCryptTreeAlreadyExistsException("Stream already exists.", 1);
             else {
                 if (db.checkTreeExists(user, uid))
-                    throw new TimeCryptTreeException("Stream already exists.", 1);
+                    throw new TimeCryptTreeAlreadyExistsException("Stream already exists.", 1);
             }
 
             BlockTree tree = blockTree.createTree(uid, user, k, 1);

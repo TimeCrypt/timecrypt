@@ -11,7 +11,7 @@ import ch.ethz.dsg.timecrypt.index.IStorage;
 import ch.ethz.dsg.timecrypt.index.ITreeManager;
 import ch.ethz.dsg.timecrypt.index.UserStreamTree;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
-import ch.ethz.dsg.timecrypt.protocol.TimeCryptProtocol.*;
+import ch.ethz.dsg.timecrypt.protocol.TimeCryptNettyProtocol.*;
 import com.google.protobuf.ByteString;
 import io.netty.channel.ChannelHandlerContext;
 import org.slf4j.Logger;
@@ -21,14 +21,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class TimeCryptRequestManager {
+public class NettyRequestManager {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TimeCryptRequestManager.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(NettyRequestManager.class);
 
     private ITreeManager treeManager;
     private IStorage storage;
 
-    public TimeCryptRequestManager(ITreeManager treeManager, IStorage storage) {
+    public NettyRequestManager(ITreeManager treeManager, IStorage storage) {
         this.treeManager = treeManager;
         this.storage = storage;
     }
@@ -85,7 +85,8 @@ public class TimeCryptRequestManager {
     public void getStatistics(ChannelHandlerContext ctx, long uid, String owner, long from, long to,
                               long granularity, int[] ids) throws TimeCryptRequestException {
         UserStreamTree userTree = treeManager.getTreeForUser(uid, owner, (int) to);
-        long fromIter = from, toIter = from + granularity;
+        long fromIter = from;
+        long toIter = from + granularity;
         int numIter = (int) ((to - from) / granularity);
 
         if (numIter > 1) {

@@ -16,6 +16,8 @@ public interface ITree {
 
     void insert(int key, NodeContent[] contentData, long from, long to) throws Exception;
 
+    int getLastWrittenChunk();
+
     List<Integer> getRange(long from, long to) throws IllegalArgumentException;
 
     List<Integer> getAllKeysOfChunkNodes() throws IllegalArgumentException;

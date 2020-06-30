@@ -10,8 +10,9 @@ See [the Paper](https://www.usenix.org/system/files/nsdi20-paper-burkhalter.pdf)
 ## Structure of the repository
 This repository is split into three parts:
 - [**timecrypt-crypto**](timecrypt-crypto/README.md): The cryptographic library for TimeCrypt. It contains of the partially homomorphic-encryption-based access control construction (HEAC) for different key lengths as well as the key derivation tree implementations.
-- [**timecrypt-server**](timecrypt-server/README.md): A prototypical implementation of a TimeCrypt server that stores its data in Cassandra. The server takes care of storing the cunks of raw data as well as the digests of aggregatable meta data.
-- [**timecrypt-client**](timecrypt-client/README.md): A example implementation of a client. The client provides a [Java-API](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TimeCryptClient.java) for interacting with TimeCrypt as well as an [interactive (the cli-client)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/CliClient.java) and [non-interactive CLI implementation (the testbed)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TestBed.java) that simulates a producer like an IoT device.
+- [**timecrypt-server**](timecrypt-server/README.md): TimeCrypt server implementation that stores its data in Cassandra or Memory. The server takes care of storing the chunks of raw data as well as the digests of aggregatable meta data.
+- [**timecrypt-client**](timecrypt-client/README.md): Implements the TimeCrypt client. The client provides a [Java-API](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TimeCryptClient.java) for interacting with TimeCrypt as well as an [interactive (the cli-client)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/CliClient.java) and [non-interactive CLI implementation (the testbed)](timecrypt-client/src/main/java/ch/ethz/dsg/timecrypt/TestBed.java) that simulates a producer like an IoT device.
+- [**timecrypt-examples**](timecrypt-examples/README.md): Examples of how to use the TimeCrypt API in Java. [(Example1)](timecrypt-examples/src/main/java/ch/ethz/dsg/timecrypt/BasicTCUsage.java)
 
 For more information see the individual README files in the folders.
 
@@ -25,6 +26,13 @@ docker-compose up --build
 This will build the project inside a Docker container, create an Docker network for the server and Cassandra and will start both.
 
 Afterwards you have a running TimeCrypt server and just need to connect a client to it.
+
+The following command runs [(Example1)](timecrypt-examples/src/main/java/ch/ethz/dsg/timecrypt/BasicTCUsage.java).
+
+```
+docker run --network=timecrypt-network eth/timecrypt example1
+```
+
 
 If you just want to see a Producer in action you can run a testbed client in Docker with:
 

@@ -14,11 +14,11 @@ import ch.ethz.dsg.timecrypt.client.streamHandling.Stream;
 
 import java.util.List;
 
-public class MinMaxCalculation implements Calculation {
+public class ExactMinMaxCalculation implements Calculation {
 
     boolean max;
 
-    public MinMaxCalculation(boolean max) {
+    public ExactMinMaxCalculation(boolean max) {
         this.max = max;
     }
 
@@ -28,6 +28,8 @@ public class MinMaxCalculation implements Calculation {
         if (!chunkScanAllowed) {
             throw new QueryNeedsChunkScanException(QueryNeedsChunkScanException.ChunkScanReason.NO_METADATA_SUPPORT
                     , "The calculation of min / max can not be performed on metadata only");
+        } else {
+            query.activateChunkScan();
         }
         return query;
     }

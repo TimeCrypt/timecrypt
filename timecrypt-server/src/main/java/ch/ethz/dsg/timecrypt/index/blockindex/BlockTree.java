@@ -85,7 +85,7 @@ public class BlockTree implements ITree {
 
     @Override
     public void insert(int key, NodeContent[] contentData, long fromL, long toL) throws Exception {
-        if (fromL < root.getVersion() - 1)
+        if (fromL != root.getVersion())
             throw new RuntimeException("Not in order Insert!");
         int from = (int) fromL, to = (int) toL;
         int maxRetry = 5;
@@ -158,6 +158,11 @@ public class BlockTree implements ITree {
             lowerNode.setNewVersion(newVersion);
         }
         this.man.pushUpdates(summary);
+    }
+
+    @Override
+    public int getLastWrittenChunk() {
+        return root.getVersion() - 1;
     }
 
     @Override
@@ -248,7 +253,7 @@ public class BlockTree implements ITree {
     public NodeContent[] getAggregation(long fromL, long toL, int[] ids) throws Exception {
         int from = (int) fromL, to = (int) toL;
         if (to <= from) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("From (" + from + ") has to be greater then to (" + to + ")");
         }
 
         updateToNeededVersion(to, MAX_RETRY);

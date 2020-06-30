@@ -5,24 +5,29 @@
 
 package ch.ethz.dsg.timecrypt.db;
 
+import ch.ethz.dsg.timecrypt.exceptions.TimeCryptStorageException;
+import ch.ethz.dsg.timecrypt.index.Chunk;
 import ch.ethz.dsg.timecrypt.index.blockindex.BlockTree;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.BlockIdUtil;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.BlockNode;
-import ch.ethz.dsg.timecrypt.exceptions.TimeCryptStorageException;
-import ch.ethz.dsg.timecrypt.index.Chunk;
-import com.datastax.driver.core.*;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.MoreExecutors;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.cql.*;
+import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import org.cognitor.cassandra.migration.Database;
 import org.cognitor.cassandra.migration.MigrationRepository;
 import org.cognitor.cassandra.migration.MigrationTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Semaphore;
 
 public class CassandraDatabaseManager {
@@ -53,76 +58,106 @@ public class CassandraDatabaseManager {
             "SELECT uid FROM treestore WHERE username = ? AND uid = ?;";
 
     private static Logger logger = LoggerFactory.getLogger(CassandraDatabaseManager.class);
-    private Cluster cassandraCluster;
-    private Session sessionCassandra;
     private static boolean statementsRdy = false;
-
+    private static boolean migrated = false;
     private static PreparedStatement insertTreestore;
     private static PreparedStatement insertBLOCK;
     private static PreparedStatement querySingleBLOCK;
     private static PreparedStatement querySingleTree;
     private static PreparedStatement checkTreeExists;
-
     private static PreparedStatement insertChunk;
     private static PreparedStatement queryChunks;
-
     private static PreparedStatement deleteTreestore;
     private static PreparedStatement deleteTreeblockstore;
     private static PreparedStatement deleteChunkstore;
-
+    private CqlSession sessionCassandra;
     private Semaphore semWrite;
     private Semaphore semRead;
 
-    public CassandraDatabaseManager(Cluster cassandraCluster, int maxConnections) {
-        this.cassandraCluster = cassandraCluster;
+    public CassandraDatabaseManager(String[] serverNodes, int port, int maxConnections) {
         int numInFligts = maxConnections * 256;
         semWrite = new Semaphore(numInFligts / 4, true);
         semRead = new Semaphore(numInFligts / 2, true);
-        createSessionAndStatemnts();
+
+        // The migration framework explicitly advices to use a custom session for the migration
+        migrate(serverNodes, port);
+        this.sessionCassandra = connectToCluster(serverNodes, port, maxConnections);
+        createStatements();
     }
 
-    public CassandraDatabaseManager(String[] serverNodes, int port, int minConnections, int maxConnections) {
-        connectToCluster(serverNodes, port, minConnections, maxConnections);
-        createSessionAndStatemnts();
+    public CqlSession getSessionCassandra() {
+        return sessionCassandra;
     }
 
-    private void connectToCluster(String[] serverNodes, int port, int minConnections, int maxConnections) {
-        PoolingOptions poolingOptions = new PoolingOptions();
-        poolingOptions.setConnectionsPerHost(HostDistance.LOCAL, minConnections, maxConnections);
-        poolingOptions.setConnectionsPerHost(HostDistance.REMOTE, minConnections, maxConnections);
-        this.cassandraCluster = Cluster.builder()
-                .addContactPoints(serverNodes)
-                .withPort(port)
-                .withPoolingOptions(poolingOptions)
+    private CqlSession connectToCluster(String[] serverNodes, int port, int maxConnections) {
+        // TODO: Before switching to Datastax 4.5 there was a way to note the min connections:
+        // poolingOptions.setConnectionsPerHost(HostDistance.LOCAL, minConnections, maxConnections);
+        // poolingOptions.setConnectionsPerHost(HostDistance.REMOTE, minConnections, maxConnections);
+
+        DriverConfigLoader loader = DriverConfigLoader.programmaticBuilder()
+                .withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE, maxConnections)
+                .withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE, maxConnections)
+                .endProfile()
                 .build();
 
+        // TODO: Maybe give possibility to explicitly give a DC
+        CqlSessionBuilder builder = CqlSession.builder()
+                .withLocalDatacenter("datacenter1")
+                .withKeyspace(KEY_SPACE)
+                .withConfigLoader(loader);
+
+        for (String node : serverNodes) {
+            builder.addContactPoint(new InetSocketAddress(node, port));
+        }
+
         int numInFligts = maxConnections * 256;
         semWrite = new Semaphore(numInFligts / 4, true);
         semRead = new Semaphore(numInFligts / 2, true);
+        return builder.build();
     }
 
-    private void createSessionAndStatemnts() {
-        synchronized (this) {
-            // only prepare the statements if it was not already done - this is explicitly relevant for testing since
-            // the CassandraDatabaseManager gets called several times there
-            if (!statementsRdy) {
+    private void migrate(String[] serverNodes, int port) {
+        synchronized (CassandraDatabaseManager.class) {
+            if (!migrated) {
+                // Do a super long request timeout since the migrations take up to 10 sek
+                DriverConfigLoader loader = DriverConfigLoader.programmaticBuilder()
+                        .withInt(DefaultDriverOption.REQUEST_TIMEOUT, 50000)
+                        .endProfile()
+                        .build();
 
-                StringBuilder createKeyspaceStatement = new StringBuilder("CREATE keyspace IF NOT EXISTS ");
-                createKeyspaceStatement.append(KEY_SPACE);
-                createKeyspaceStatement.append(" WITH REPLICATION = {'class':'SimpleStrategy', 'replication_factor':1}");
-                String query = createKeyspaceStatement.toString();
-                LOGGER.info("Creating keyspace if not existing: " + query);
+                // TODO: Maybe give possibility to explicitly give a DC
+                CqlSessionBuilder builder = CqlSession.builder()
+                        .withLocalDatacenter("datacenter1")
+                        .withConfigLoader(loader);
 
-                sessionCassandra = cassandraCluster.connect();
-                sessionCassandra.execute(query);
-                sessionCassandra.close();
+                for (String node : serverNodes) {
+                    builder.addContactPoint(new InetSocketAddress(node, port));
+                }
 
-                MigrationTask migration = new MigrationTask(new Database(cassandraCluster, KEY_SPACE),
+                CqlSession sessionCassandra = builder.build();
+
+                CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace(KEY_SPACE)
+                        .ifNotExists()
+                        .withSimpleStrategy(1);
+
+                LOGGER.info("Creating keyspace if not existing.");
+
+                sessionCassandra.execute(createKeyspace.build());
+
+                MigrationTask migration = new MigrationTask(new Database(sessionCassandra, KEY_SPACE),
                         new MigrationRepository());
                 migration.migrate();
 
-                sessionCassandra = cassandraCluster.connect(KEY_SPACE);
+                migrated = true;
+            }
+        }
+    }
 
+    private void createStatements() {
+        synchronized (CassandraDatabaseManager.class) {
+            // only prepare the statements if it was not already done - this is explicitly relevant for testing since
+            // the CassandraDatabaseManager gets called several times there
+            if (!statementsRdy) {
                 insertTreestore = sessionCassandra.prepare(CQL_INSERT_TREE_TABLE);
                 insertBLOCK = sessionCassandra.prepare(CQL_INSERT_BLOCK_TABLE);
                 querySingleBLOCK = sessionCassandra.prepare(CQL_QUERY_BLOCK_SINGLE);
@@ -135,8 +170,6 @@ public class CassandraDatabaseManager {
                 deleteChunkstore = sessionCassandra.prepare(CQL_DELETE_CHUNKS);
 
                 statementsRdy = true;
-            } else {
-                sessionCassandra = cassandraCluster.connect(KEY_SPACE);
             }
         }
     }
@@ -149,21 +182,15 @@ public class CassandraDatabaseManager {
         }
     }
 
-    private ResultSetFuture addCallbackRead(ResultSetFuture future) {
-        Futures.addCallback(future, new FutureCallback<ResultSet>() {
-                    @Override
-                    public void onSuccess(ResultSet rows) {
-                        semRead.release();
+    private CompletionStage<AsyncResultSet> addCallbackRead(CompletionStage<AsyncResultSet> resultSetCompletionStage) {
+        resultSetCompletionStage.whenComplete(
+                ((asyncResultSet, throwable) -> {
+                    if (throwable != null) {
+                        logger.error("Read failed : " + throwable.getMessage());
                     }
-
-                    @Override
-                    public void onFailure(Throwable throwable) {
-                        logger.info("Read failed : " + throwable.getMessage());
-                        semRead.release();
-                    }
-                }
-                , MoreExecutors.directExecutor());
-        return future;
+                    semRead.release();
+                }));
+        return resultSetCompletionStage;
     }
 
     private void throttleWrite() {
@@ -174,54 +201,50 @@ public class CassandraDatabaseManager {
         }
     }
 
-    private ResultSetFuture addCallbackWrite(ResultSetFuture future) {
-        Futures.addCallback(future, new FutureCallback<ResultSet>() {
-                    @Override
-                    public void onSuccess(ResultSet rows) {
-                        semWrite.release();
+    private CompletionStage<AsyncResultSet> addCallbackWrite(CompletionStage<AsyncResultSet> resultSetCompletionStage) {
+        resultSetCompletionStage.whenComplete(
+                ((asyncResultSet, throwable) -> {
+                    if (throwable != null) {
+                        logger.error("Write failed : " + throwable.getMessage());
                     }
-
-                    @Override
-                    public void onFailure(Throwable throwable) {
-                        logger.info("Write failed : " + throwable.getMessage());
-                        semWrite.release();
-                    }
-                }
-                , MoreExecutors.directExecutor());
-        return future;
+                    semWrite.release();
+                }));
+        return resultSetCompletionStage;
     }
 
-    public ResultSetFuture deleteAllFor(String user, long uid) {
+
+    public CompletionStage<AsyncResultSet> deleteAllFor(String user, long uid) {
         throttleWrite();
-        BatchStatement statement = new BatchStatement();
+        BatchStatement statement = BatchStatement.newInstance(DefaultBatchType.LOGGED);
         statement.add(deleteTreeblockstore.bind().setString(0, user).setLong(1, uid));
         statement.add(deleteChunkstore.bind().setString(0, user).setLong(1, uid));
         statement.add(deleteTreestore.bind().setString(0, user).setLong(1, uid));
-        return addCallbackWrite(sessionCassandra.executeAsync(statement));
+        CompletionStage<AsyncResultSet> var = sessionCassandra.executeAsync(statement);
+        return addCallbackWrite(var);
     }
 
-    public ResultSetFuture deleteAllIndexFor(String user, long uid) {
+    public CompletionStage<AsyncResultSet> deleteAllIndexFor(String user, long uid) {
         throttleWrite();
-        BatchStatement statement = new BatchStatement();
+        BatchStatement statement = BatchStatement.newInstance(DefaultBatchType.LOGGED);
         statement.add(deleteTreeblockstore.bind().setString(0, user).setLong(1, uid));
         statement.add(deleteTreestore.bind().setString(0, user).setLong(1, uid));
         return addCallbackWrite(sessionCassandra.executeAsync(statement));
     }
 
-    public ResultSetFuture deleteAllChunksFor(String user, long uid) {
+    public CompletionStage<AsyncResultSet> deleteAllChunksFor(String user, long uid) {
         throttleWrite();
-        BatchStatement statement = new BatchStatement();
+        BatchStatement statement = BatchStatement.newInstance(DefaultBatchType.LOGGED);
         statement.add(deleteChunkstore.bind().setString(0, user).setLong(1, uid));
         return addCallbackWrite(sessionCassandra.executeAsync(statement));
     }
 
-    public ResultSetFuture insertTree(String user, long uid, BlockNode rootnode, int verison, int k) {
+    public CompletionStage<AsyncResultSet> insertTree(String user, long uid, BlockNode rootnode, int verison, int k) {
         throttleWrite();
         BoundStatement bound = insertTreestore.bind()
                 .setString(0, user)
                 .setLong(1, uid)
                 .setLong(2, rootnode.getId())
-                .setBytes(3, ByteBuffer.wrap(rootnode.encodeContent()))
+                .setByteBuffer(3, ByteBuffer.wrap(rootnode.encodeContent()))
                 .setInt(4, verison)
                 .setInt(5, k);
 
@@ -229,34 +252,34 @@ public class CassandraDatabaseManager {
         return addCallbackWrite(sessionCassandra.executeAsync(bound));
     }
 
-    public ResultSetFuture insertBlocks(String user, long uid, List<BlockNode> nodes) {
+    public CompletionStage<AsyncResultSet> insertBlocks(String user, long uid, List<BlockNode> nodes) {
         throttleWrite();
-        BatchStatement batch = new BatchStatement();
+        BatchStatementBuilder batch = BatchStatement.builder(DefaultBatchType.LOGGED);
+               // newInstance(DefaultBatchType.LOGGED).;
         for (BlockNode node : nodes) {
             BoundStatement bound = insertBLOCK.bind()
                     .setString(0, user)
                     .setLong(1, uid)
                     .setLong(2, node.getId())
                     .setInt(3, node.getVersion())
-                    .setBytes(4, ByteBuffer.wrap(node.encodeContent()));
-            batch.add(bound);
-
+                    .setByteBuffer(4, ByteBuffer.wrap(node.encodeContent()));
+            batch.addStatement(bound);
         }
-        return addCallbackWrite(sessionCassandra.executeAsync(batch));
+        return addCallbackWrite(sessionCassandra.executeAsync(batch.build()));
     }
 
-    public ResultSetFuture insertBlock(String user, long uid, BlockNode node) {
+    public CompletionStage<AsyncResultSet> insertBlock(String user, long uid, BlockNode node) {
         throttleWrite();
         BoundStatement bound = insertBLOCK.bind()
                 .setString(0, user)
                 .setLong(1, uid)
                 .setLong(2, node.getId())
                 .setInt(3, node.getVersion())
-                .setBytes(4, ByteBuffer.wrap(node.encodeContent()));
+                .setByteBuffer(4, ByteBuffer.wrap(node.encodeContent()));
         return addCallbackWrite(sessionCassandra.executeAsync(bound));
     }
 
-    public ResultSetFuture loadBlock(String user, long uid, long blockid) {
+    public CompletionStage<AsyncResultSet> loadBlock(String user, long uid, long blockid) {
         throttleRead();
         BoundStatement bound = querySingleBLOCK.bind()
                 .setString(0, user)
@@ -265,7 +288,7 @@ public class CassandraDatabaseManager {
         return addCallbackRead(sessionCassandra.executeAsync(bound));
     }
 
-    public ResultSetFuture loadTree(String user, long uid) {
+    public CompletionStage<AsyncResultSet> loadTree(String user, long uid) {
         throttleRead();
         BoundStatement bound = querySingleTree.bind()
                 .setString(0, user)
@@ -273,39 +296,39 @@ public class CassandraDatabaseManager {
         return addCallbackRead(sessionCassandra.executeAsync(bound));
     }
 
-    public BlockTree getTree(ResultSetFuture futureSet) throws Exception {
-        ResultSet result = futureSet.get();
+    public BlockTree getTree(CompletionStage<AsyncResultSet> futureSet) throws Exception {
+        AsyncResultSet result = futureSet.toCompletableFuture().get();
         Row row = result.one();
         if (row == null)
             throw new TimeCryptStorageException("No tree found", 1);
         long id = row.getLong("root_node");
         int from = BlockIdUtil.getFrom(id), to = BlockIdUtil.getTo(id);
         BlockNode root = new BlockNode(row.getInt("root_version"), from, to,
-                BlockNode.decodeNodeContent(row.getBytes("root_content").array()));
+                BlockNode.decodeNodeContent(row.getByteBuffer("root_content").array()));
         return new BlockTree(row.getInt("k"), root);
     }
 
-    public BlockNode getNode(ResultSetFuture futureSet, long blockid) throws Exception {
-        ResultSet result = futureSet.get();
+    public BlockNode getNode(CompletionStage<AsyncResultSet> futureSet, long blockid) throws Exception {
+        AsyncResultSet result = futureSet.toCompletableFuture().get();
         Row row = result.one();
         if (row == null)
             throw new TimeCryptStorageException("No tree found", 1);
         int from = BlockIdUtil.getFrom(blockid), to = BlockIdUtil.getTo(blockid);
         return new BlockNode(row.getInt("version"), from, to,
-                BlockNode.decodeNodeContent(row.getBytes("content").array()));
+                BlockNode.decodeNodeContent(row.getByteBuffer("content").array()));
     }
 
-    public ResultSetFuture insertChunk(String user, long uid, Chunk chunk) {
+    public CompletionStage<AsyncResultSet> insertChunk(String user, long uid, Chunk chunk) {
         throttleWrite();
         BoundStatement bound = insertChunk.bind()
                 .setString(0, user)
                 .setLong(1, uid)
                 .setInt(2, chunk.getStorageKey())
-                .setBytes(3, ByteBuffer.wrap(chunk.getData()));
+                .setByteBuffer(3, ByteBuffer.wrap(chunk.getData()));
         return addCallbackWrite(sessionCassandra.executeAsync(bound));
     }
 
-    public ResultSetFuture loadChunks(String user, long uid, int from, int to) {
+    public CompletionStage<AsyncResultSet> loadChunks(String user, long uid, int from, int to) {
         throttleRead();
         BoundStatement bound = queryChunks.bind()
                 .setString(0, user)
@@ -320,18 +343,18 @@ public class CassandraDatabaseManager {
         return set.one() != null;
     }
 
-    public List<Chunk> getChunks(ResultSetFuture future) throws Exception {
+    public List<Chunk> getChunks(CompletionStage<AsyncResultSet> future) throws Exception {
         List<Chunk> chunks = new ArrayList<>();
-        ResultSet result = future.get();
-        for (Row row : result) {
-            chunks.add(new Chunk(row.getInt("chunk_key"), row.getBytes("chunk").array()));
+        AsyncResultSet result = future.toCompletableFuture().get();
+
+        // TODO check for more pages?
+        for (Row row : result.currentPage()) {
+            chunks.add(new Chunk(row.getInt("chunk_key"), row.getByteBuffer("chunk").array()));
         }
         return chunks;
     }
 
     public void close() {
         this.sessionCassandra.close();
-        this.cassandraCluster.close();
     }
-
 }

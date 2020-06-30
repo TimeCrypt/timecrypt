@@ -10,11 +10,12 @@ import ch.ethz.dsg.timecrypt.index.blockindex.IBlockTreeFetcher;
 import ch.ethz.dsg.timecrypt.index.blockindex.INodeManager;
 import ch.ethz.dsg.timecrypt.index.blockindex.UpdateSummary;
 import ch.ethz.dsg.timecrypt.index.blockindex.node.BlockNode;
-import com.datastax.driver.core.ResultSetFuture;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 
 public class CassandraBlockTreeManager implements IBlockTreeFetcher {
 
@@ -52,13 +53,13 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
 
 
     @Override
-    public BlockTree createTree(long uid, String user, int k, int interval) throws Exception {
+    public BlockTree createTree(long uid, String user, int k, int interval) {
         BlockNode newRoot = new BlockNode(0, 0, interval * k, k);
         CassandraNodeManager nodeMan = new CassandraNodeManager(user, uid);
         BlockTree tree = new BlockTree(k, newRoot, nodeMan);
-        ResultSetFuture resTree = man.insertTree(user, uid, newRoot, 0, k);
+        CompletionStage<AsyncResultSet> resTree = man.insertTree(user, uid, newRoot, 0, k);
         //ResultSetFuture resBlock = man.insertBlock(user, uid, newRoot);
-        treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(tree, resTree));
+        treeCache.put(new TreeKey(user, uid), new CacheContent<>(tree, resTree));
         return tree;
     }
 
@@ -67,11 +68,11 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
         CacheContent<BlockTree> cacheTree = treeCache.getIfPresent(new TreeKey(user, uid));
         BlockTree newest;
         if (cacheTree == null) {
-            ResultSetFuture res = man.loadTree(user, uid);
+            CompletionStage<AsyncResultSet> res = man.loadTree(user, uid);
             newest = man.getTree(res);
             CassandraNodeManager nodeMan = new CassandraNodeManager(user, uid);
             newest.setMan(nodeMan);
-            treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(newest));
+            treeCache.put(new TreeKey(user, uid), new CacheContent<>(newest));
         } else {
             newest = cacheTree.content;
             cacheTree.awaitDBWrite();
@@ -84,11 +85,11 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
         CacheContent<BlockTree> cacheTree = treeCache.getIfPresent(new TreeKey(user, uid));
         BlockTree newest;
         if (cacheTree == null) {
-            ResultSetFuture res = man.loadTree(user, uid);
+            CompletionStage<AsyncResultSet> res = man.loadTree(user, uid);
             newest = man.getTree(res);
             CassandraNodeManager nodeMan = new CassandraNodeManager(user, uid);
             newest.setMan(nodeMan);
-            treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(newest));
+            treeCache.put(new TreeKey(user, uid), new CacheContent<>(newest));
         } else {
             newest = cacheTree.content;
         }
@@ -100,20 +101,20 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
         CacheContent<BlockTree> cacheTree = treeCache.getIfPresent(new TreeKey(user, uid));
         BlockTree newest;
         if (cacheTree == null) {
-            ResultSetFuture res = man.loadTree(user, uid);
+            CompletionStage<AsyncResultSet> res = man.loadTree(user, uid);
             newest = man.getTree(res);
             CassandraNodeManager nodeMan = new CassandraNodeManager(user, uid);
             newest.setMan(nodeMan);
-            treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(newest));
+            treeCache.put(new TreeKey(user, uid), new CacheContent<>(newest));
 
         } else {
             newest = cacheTree.content;
             if (newest.root.getVersion() < minVersion) {
                 treeCache.invalidate(new TreeKey(user, uid));
-                ResultSetFuture res = man.loadTree(user, uid);
+                CompletionStage<AsyncResultSet> res = man.loadTree(user, uid);
                 newest = man.getTree(res);
                 newest.setMan(new CassandraNodeManager(user, uid));
-                treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(newest));
+                treeCache.put(new TreeKey(user, uid), new CacheContent<>(newest));
             }
         }
         return newest;
@@ -153,21 +154,21 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
     }
 
     public static class CacheContent<T> {
-        public ResultSetFuture insertSet = null;
+        public CompletionStage<AsyncResultSet> insertSet = null;
         public T content;
 
         public CacheContent(T content) {
             this.content = content;
         }
 
-        public CacheContent(T content, ResultSetFuture insertSet) {
+        public CacheContent(T content, CompletionStage<AsyncResultSet> insertSet) {
             this.content = content;
             this.insertSet = insertSet;
         }
 
         public void awaitDBWrite() throws Exception {
             if (insertSet != null)
-                insertSet.get();
+                insertSet.toCompletableFuture().get();
         }
     }
 
@@ -210,9 +211,9 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
             CacheContent<BlockNode> result = blockCache.getIfPresent(new NodeKey(user, uid, id));
             BlockNode res;
             if (result == null) {
-                ResultSetFuture futureNode = man.loadBlock(this.user, this.uid, id);
+                CompletionStage<AsyncResultSet> futureNode = man.loadBlock(this.user, this.uid, id);
                 res = man.getNode(futureNode, id);
-                result = new CacheContent<BlockNode>(res);
+                result = new CacheContent<>(res);
                 blockCache.put(new NodeKey(user, uid, id), result);
             }
             return result;
@@ -226,16 +227,17 @@ public class CassandraBlockTreeManager implements IBlockTreeFetcher {
         }
 
         @Override
-        public void pushUpdates(UpdateSummary summary) throws Exception {
+        public void pushUpdates(UpdateSummary summary) {
             List<BlockNode> newNodes = summary.getNewNodes();
             CassandraNodeManager nodeMan = new CassandraNodeManager(user, uid);
             BlockTree tree = new BlockTree(summary.k, summary.getNewRoot(), nodeMan);
-            ResultSetFuture res = man.insertBlocks(user, uid, newNodes);
-            ResultSetFuture resTree = man.insertTree(user, uid, summary.getNewRoot(), summary.version, summary.k);
+            CompletionStage<AsyncResultSet> res = man.insertBlocks(user, uid, newNodes);
+            CompletionStage<AsyncResultSet> resTree =
+                    man.insertTree(user, uid, summary.getNewRoot(), summary.version, summary.k);
             for (BlockNode n : newNodes) {
-                blockCache.put(new NodeKey(user, uid, n.getId()), new CacheContent<BlockNode>(n, res));
+                blockCache.put(new NodeKey(user, uid, n.getId()), new CacheContent<>(n, res));
             }
-            treeCache.put(new TreeKey(user, uid), new CacheContent<BlockTree>(tree, resTree));
+            treeCache.put(new TreeKey(user, uid), new CacheContent<>(tree, resTree));
 
         }
 

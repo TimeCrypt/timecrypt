@@ -21,7 +21,7 @@ option java_multiple_files = true;
 option java_outer_classname = "TimeCryptProtocol";
 
 // import "google/protobuf/timestamp.proto";
-import "google/rpc/status.proto";
+// import "google/rpc/status.proto";
 
 /*
  *  Functions in paper:
@@ -45,41 +45,57 @@ import "google/rpc/status.proto";
  *      Create a View with the given policy in JSON format.
  *  (10) CheckView(viewid, princ-id)
  *       Retrieve a View token.
+ *
+ * This proto differs a bit from the functions in the paper for ease of implementation.
  */
 
 service Timecrypt {
+    // Create a new stream defines the configuration of its associated MetaData
     rpc createStream (streamMessage) returns (streamId);
-    rpc deleteStream (streamId) returns (google.rpc.Status);
-    rpc insertChunk (chunk) returns (chunkId);
-    rpc getLastWrittenChunk (Empty) returns (chunkId);
-    rpc getRawData (chunkRequestMessage) returns (chunkResponseMessage);
-    rpc getStatisticalData (statisticRequestMessage) returns (statisticResponseMessage);
-    // statistics may only request subset of metadata
+    // Delete specified stream with all associated data.
+    rpc deleteStream (streamId) returns (Empty);
+    // Add a chunk (and its corresponding metadata digest) to the stream. It is only allowed to add the chunk with the
+    // next chunk id.
+    rpc insertChunk (chunkCreationMessage) returns (chunkId);
+    // returns the last chunk id that was written
+    rpc getLastWrittenChunk (streamId) returns (chunkId);
+    // Retrieve all chunks within the specified interval.
+    rpc getRawData (chunkRequestMessage) returns (stream chunk);
+    // getStatisticalData returns digests in a given interval statistics may only request subset of metadata
+    rpc getStatisticalData (statisticRequestMessage) returns (stream digest);
+    // Creates a view. A view grants access to a stream (of another client) in a certain interval in a certain granularity
+    rpc createView (view) returns (viewId);
+    // Gives another user permission to access a view (i.e. it stores the view key encrypted with the users key
+    // on the server)
+    rpc grantView (grantViewMessage) returns (Empty);
+    // Get a view that was encrypted for the client ID from the server
+    rpc retrieveView (viewId) returns (retrieveViewMessage);
 }
 
-enum EncryptionSchema {
+enum EncryptionScheme {
     PLAIN = 0;
     LONG = 1;
     LONG_MAC = 2;
     BIG_INT = 3;
+    BIG_INT_MAC = 4;
 }
 
 message Empty {
 }
 
 message metadataConfig {
-    // number inside the metadata
+    // number inside the metadata vector - this has to be unique
     int32 id = 1;
-    EncryptionSchema schema = 2;
+    EncryptionScheme scheme = 2;
 }
 
 message streamMessage {
-    string ownerID = 1;
+    string ownerId = 1;
     repeated metadataConfig metadataConfig = 2;
 }
 
 message streamId {
-    string streamId = 1;
+    int64 streamId = 1;
 }
 
 message longPayload {
@@ -89,20 +105,24 @@ message longPayload {
 message longMacPayload {
     int64 encryptedLong = 1;
     bytes authCode = 2;
+    int64 authCodeBits = 3;
 }
 
 message bigIntPayload {
     bytes encryptedBigInt = 1;
+    int64 bits = 2;
 }
 
 message bigIntMacPayload {
     bytes encryptedBigInt = 1;
-    bytes authCode = 2;
+    int64 bits = 2;
+    bytes authCode = 3;
+    int64 authCodeBits = 4;
 }
 
 message metadataContent {
     metadataConfig config = 1;
-    // Model the stuff as useful aggregation object - according to metadata config (long, long MAC)
+    // The encrypted payload - encrypted on the client using HEAC
     oneof payload {
         longPayload long_payload = 2;
         longMacPayload long_mac_payload = 3;
@@ -115,23 +135,55 @@ message digest {
     chunkId start = 1;
     chunkId end = 2;
     repeated metadataContent metadataContent = 3;
-
 }
 
 message chunk {
     chunkId chunkId = 1;
     streamId streamId = 2;
+    // Encrypted on the client using AES
     bytes chunk_content = 3;
-    digest metadata = 4;
+}
+
+// Transmit the chunk meta data during chunk creation
+message chunkCreationMessage {
+    chunk chunk = 1;
+    digest digest = 2;
 }
 
 message chunkId {
     int64 id = 1;
 }
 
+message view {
+    streamId streamId = 1;
+    chunkId start = 2;
+    chunkId end = 3;
+    int32 granularity = 4;
+    // Encrypted on the client using AES
+    bytes metadata = 5;
+    // Encrypted on the client using AES
+    bytes keys = 6;
+}
+
+message viewId {
+    int64 id = 1;
+}
+
+message grantViewMessage {
+    viewId viewId = 1;
+    string requesterId = 2;
+    // The AES key of the view encrypted with the private key of the client that is allowed to access the view
+    bytes viewKey = 3;
+}
+
+message retrieveViewMessage {
+    grantViewMessage key = 1;
+    view view = 2;
+}
+
 // Requests all chunk - from startChunkId to endChunkId (inclusive the starting and ending chunks)
 // Granularity is the number of chunks that will be added up to return - the granularity level should be a divider of
-// the intervall (start - end) that is selected
+// the interval (start - end) that is selected
 // end is exclusive of the chunk
 message statisticRequestMessage {
     streamId streamId = 1;
@@ -148,10 +200,3 @@ message chunkRequestMessage {
     chunkId end = 3;
 }
 
-message chunkResponseMessage {
-    repeated chunk chunks = 1;
-}
-
-message statisticResponseMessage {
-    repeated digest digests = 1;
-}

@@ -34,6 +34,13 @@ case "$ACTION" in
 
     java -jar $TESTBED_JAR_NAME --verbose "${@:2}"
     ;;
+  example1)
+    echo "Starting example 1 - waiting for server"
+    wait-for-it -t $TIMECRYPT_TIMEOUT $TIMECRYPT_HOST:$TIMECRYPT_PORT
+    echo "Server up"
+
+    java -jar $EXAMPLE1_JAR_NAME --verbose "${@:2}"
+    ;;
   client)
     echo "Starting client - waiting for server"
     wait-for-it -t $TIMECRYPT_TIMEOUT $TIMECRYPT_HOST:$TIMECRYPT_PORT

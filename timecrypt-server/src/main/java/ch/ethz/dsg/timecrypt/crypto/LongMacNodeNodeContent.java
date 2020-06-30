@@ -10,21 +10,21 @@ import ch.ethz.dsg.timecrypt.index.blockindex.node.NodeContent;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
-public class LongBigintContent extends IntegerContent {
+public class LongMacNodeNodeContent extends LongNodeContent {
     public static final BigInteger PRIME = new BigInteger("340282366920938463463374607431768211297");
 
     private BigInteger mac;
 
-    public LongBigintContent(long content, BigInteger mac) {
+    public LongMacNodeNodeContent(long content, BigInteger mac) {
         super(content);
         this.mac = mac;
     }
 
-    public static LongBigintContent decode(byte[] data) {
+    public static LongMacNodeNodeContent decode(byte[] data) {
         byte[] macBytes = new byte[data.length - Long.BYTES - 2];
         ByteBuffer buff = ByteBuffer.wrap(data, 1, Long.BYTES);
         System.arraycopy(data, 1 + Long.BYTES, macBytes, 0, macBytes.length);
-        return new LongBigintContent(buff.getLong(), new BigInteger(1, macBytes));
+        return new LongMacNodeNodeContent(buff.getLong(), new BigInteger(1, macBytes));
     }
 
     public BigInteger getMac() {
@@ -33,16 +33,16 @@ public class LongBigintContent extends IntegerContent {
 
     @Override
     public NodeContent copy() {
-        return new LongBigintContent(this.i, this.mac);
+        return new LongMacNodeNodeContent(this.i, this.mac);
     }
 
     @Override
     public void mergeOther(NodeContent otherContent) {
         super.mergeOther(otherContent);
-        if (!(otherContent instanceof LongBigintContent))
+        if (!(otherContent instanceof LongMacNodeNodeContent))
             throw new RuntimeException("Merge Failed, inconsistent Node Contents");
         //this.mac = this.mac.add(((LongBigintContent) otherContent).mac);
-        this.mac = this.mac.add(((LongBigintContent) otherContent).mac);
+        this.mac = this.mac.add(((LongMacNodeNodeContent) otherContent).mac);
     }
 
     @Override
@@ -59,7 +59,7 @@ public class LongBigintContent extends IntegerContent {
 
     @Override
     public NodeContent createEmpty() {
-        return new LongBigintContent(0, BigInteger.ZERO);
+        return new LongMacNodeNodeContent(0, BigInteger.ZERO);
     }
 
     @Override

@@ -3,14 +3,14 @@
  * Licensed under the Apache License, Version 2.0, see LICENSE file for more details.
  */
 
-package ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver;
+package ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer;
 
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotReceiveException;
 import ch.ethz.dsg.timecrypt.client.exceptions.InvalidQueryException;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedChunk;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
-import ch.ethz.dsg.timecrypt.client.serverInterface.nettyserver.TimeCryptNettyProtocol.*;
+import ch.ethz.dsg.timecrypt.client.serverInterface.nettyServer.TimeCryptNettyProtocol.*;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import com.google.protobuf.ByteString;
 
@@ -24,7 +24,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class BasicClient implements Closeable, AutoCloseable {
+public class NettyClient implements Closeable, AutoCloseable {
 
     private Socket net;
     private OutputStream outStream;
@@ -32,13 +32,12 @@ public class BasicClient implements Closeable, AutoCloseable {
 
     private byte[] buffer = new byte[1024 * 8];
 
-    public BasicClient(String ip, int port) throws IOException {
+    public NettyClient(String ip, int port) throws IOException {
         this.net = new Socket(ip, port);
         this.net.setTcpNoDelay(true);
         outStream = this.net.getOutputStream();
         inStream = this.net.getInputStream();
     }
-
 
     static void writeRawVarint32(OutputStream out, int value) throws IOException {
         while ((value & -128) != 0) {
@@ -94,7 +93,7 @@ public class BasicClient implements Closeable, AutoCloseable {
         int id = 0;
         for (Metadata meta : response.getDataList()) {
             StreamMetaData metaInfo = info.get(id++);
-            result.add(NodeContentSerialization.decodeNodeContent(meta.getData().toByteArray(), metaInfo.getId(), metaInfo.getEncryptionSchema()));
+            result.add(NodeContentSerialization.decodeNodeContent(meta.getData().toByteArray(), metaInfo.getId(), metaInfo.getEncryptionScheme()));
         }
         return new EncryptedDigest(streamId, chunkIdFrom, chunkIdTo, result);
     }

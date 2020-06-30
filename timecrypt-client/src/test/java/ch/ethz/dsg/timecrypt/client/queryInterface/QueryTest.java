@@ -80,9 +80,9 @@ class QueryTest {
 
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG_MAC));
+                StreamMetaData.MetadataEncryptionScheme.LONG_MAC));
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128_MAC));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128_MAC));
 
         long id = testInterface.createStream(metaData);
 

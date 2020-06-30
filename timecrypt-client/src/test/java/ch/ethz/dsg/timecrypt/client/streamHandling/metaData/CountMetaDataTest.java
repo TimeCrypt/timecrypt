@@ -21,7 +21,7 @@ class CountMetaDataTest {
 
     @Test
     void calculate() {
-        CountMetaData metaData = new CountMetaData(StreamMetaData.MetadataEncryptionSchema.LONG, 0);
+        CountMetaData metaData = new CountMetaData(StreamMetaData.MetadataEncryptionScheme.LONG, 0);
 
         List<DataPoint> dataPoints = new ArrayList<>();
         for (int i = 0; i < 100; i++) {

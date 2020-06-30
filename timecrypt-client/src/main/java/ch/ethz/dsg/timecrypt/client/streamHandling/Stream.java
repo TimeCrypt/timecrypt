@@ -60,10 +60,11 @@ public class Stream {
      * @param resolutionLevels    The resolution levels define the granularity of sharing Streams with others.
      * @param metaData            The requested meta data types define the kind of computations that get supported.
      * @param localChunkStorePath The path for the chunk store to use when saving unwritten chunks before transmission.
+     * @param streamStartDate     The start Date of the stream.
      * @throws IOException Exception that is thrown if the local chunk store could not be created.
      */
     public Stream(long id, String name, String description, TimeUtil.Precision chunkSize, List<TimeUtil.Precision> resolutionLevels,
-                  List<StreamMetaData> metaData, String localChunkStorePath) throws IOException {
+                  List<StreamMetaData> metaData, String localChunkStorePath, Date streamStartDate) throws IOException {
         this.name = name;
         this.description = description;
         this.precision = chunkSize;
@@ -73,7 +74,24 @@ public class Stream {
         this.metaData = metaData;
         this.localChunkStorePath = localChunkStorePath;
         this.localChunkStore = new YamlTimeCryptLocalChunkStore(this.localChunkStorePath);
-        this.startDate = TimeUtil.getDateAtLastFullMinute();
+        this.startDate = streamStartDate;
+    }
+
+    /**
+     * Creates a new TimeCrypt stream and accepts all user defined arguments.
+     *
+     * @param id                  The stream ID that was defined by the server.
+     * @param name                A human readable name - not used for anything inside TimeCrypt
+     * @param description         A human readable description - not used for anything inside TimeCrypt
+     * @param chunkSize           The size of the chunks defines the maximum precision of aggregations.
+     * @param resolutionLevels    The resolution levels define the granularity of sharing Streams with others.
+     * @param metaData            The requested meta data types define the kind of computations that get supported.
+     * @param localChunkStorePath The path for the chunk store to use when saving unwritten chunks before transmission.
+     * @throws IOException Exception that is thrown if the local chunk store could not be created.
+     */
+    public Stream(long id, String name, String description, TimeUtil.Precision chunkSize, List<TimeUtil.Precision> resolutionLevels,
+                  List<StreamMetaData> metaData, String localChunkStorePath) throws IOException {
+        this(id, name, description, chunkSize, resolutionLevels, metaData, localChunkStorePath, TimeUtil.getDateAtLastFullMinute());
     }
 
     public TimeUtil.Precision getPrecision() {

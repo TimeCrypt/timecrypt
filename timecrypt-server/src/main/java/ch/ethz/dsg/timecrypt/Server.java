@@ -5,14 +5,22 @@
 
 package ch.ethz.dsg.timecrypt;
 
+import ch.ethz.dsg.timecrypt.db.CassandraBlockTreeManager;
+import ch.ethz.dsg.timecrypt.db.CassandraDatabaseManager;
+import ch.ethz.dsg.timecrypt.db.CassandraStorage;
+import ch.ethz.dsg.timecrypt.db.CassandraTreeManager;
+import ch.ethz.dsg.timecrypt.db.debug.DebugStorage;
+import ch.ethz.dsg.timecrypt.index.IStorage;
+import ch.ethz.dsg.timecrypt.index.ITreeManager;
+import ch.ethz.dsg.timecrypt.index.MemoryTreeManager;
 import ch.ethz.dsg.timecrypt.index.blockindex.IBlockTreeFetcher;
 import ch.ethz.dsg.timecrypt.index.blockindex.InMemoryCacheBlockTreeManager;
-import ch.ethz.dsg.timecrypt.db.*;
-import ch.ethz.dsg.timecrypt.db.debug.DebugStorage;
-import ch.ethz.dsg.timecrypt.index.MemoryTreeManager;
-import ch.ethz.dsg.timecrypt.server.TimeCryptRequestManager;
+import ch.ethz.dsg.timecrypt.server.NettyRequestManager;
 import ch.ethz.dsg.timecrypt.server.TimeCryptServerChannelInitializer;
-import com.datastax.driver.core.Cluster;
+import ch.ethz.dsg.timecrypt.server.grpc.AuthServerInterceptor;
+import ch.ethz.dsg.timecrypt.server.grpc.TimeCryptGRPCServer;
+import com.datastax.oss.driver.api.core.AllNodesFailedException;
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
@@ -22,13 +30,20 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.concurrent.DefaultEventExecutorGroup;
 import io.netty.util.concurrent.EventExecutorGroup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 public class Server implements Runnable {
 
     public static final int DEFAULT_PORT = 15000;
-    public TimeCryptRequestManager manager = null;
-    private final int block_tree_k;
-    private final int port;
+    public static final int DEFAULT_CASSANDRA_PORT = 9042;
+    private static final String SERVER_INTERFACE_ENVIRONMENT_VARIABLE = "TIMECRYPT_SERVER_INTERFACE";
+    private static final Logger LOGGER = LoggerFactory.getLogger(Server.class);
+
+    private final int block_tree_k_factor;
+    private final int timeCryptPort;
     private final int aThreads;
     private final int cThreads;
     private final int wThreads;
@@ -39,37 +54,20 @@ public class Server implements Runnable {
     private final boolean inMemoryOnly;
     private final int cassandraMinConnections;
     private final int cassandraMaxConnections;
-    private final Cluster cluster;
+    private final InterfaceProvider interfaceProvider;
 
-    public Server(int port, int aThreads, int cThreads, int wThreads, int treeCache, int blockCache,
+    public Server(int timeCryptPort, int aThreads, int cThreads, int wThreads, int treeCache, int blockCache,
                   String[] cassandraHosts, int cassandraPort, boolean inMemoryOnly, int cassandraMinConnections,
-                  int cassandraMaxConnections) {
-        this(port, aThreads, cThreads, wThreads, treeCache, blockCache, cassandraHosts, cassandraPort, 64,
-                inMemoryOnly, cassandraMinConnections, cassandraMaxConnections);
+                  int cassandraMaxConnections, InterfaceProvider interfaceProvider) {
+        this(timeCryptPort, aThreads, cThreads, wThreads, treeCache, blockCache, cassandraHosts, cassandraPort, 64,
+                inMemoryOnly, cassandraMinConnections, cassandraMaxConnections, interfaceProvider);
     }
 
-    public Server(int port, int aThreads, int cThreads, int wThreads, int treeCache, int blockCache,
-                  Cluster cluster, boolean inMemoryOnly,
-                  int cassandraMinConnections, int cassandraMaxConnections) {
-        this.block_tree_k = 64;
-        this.port = port;
-        this.aThreads = aThreads;
-        this.cThreads = cThreads;
-        this.wThreads = wThreads;
-        this.treeCache = treeCache;
-        this.blockCache = blockCache;
-        this.cassandraHosts = new String[0];
-        this.cassandraPort = 0;
-        this.cluster = cluster;
-        this.inMemoryOnly = inMemoryOnly;
-        this.cassandraMinConnections = cassandraMinConnections;
-        this.cassandraMaxConnections = cassandraMaxConnections;
-    }
-    public Server(int port, int aThreads, int cThreads, int wThreads, int treeCache, int blockCache,
+    public Server(int timeCryptPort, int aThreads, int cThreads, int wThreads, int treeCache, int blockCache,
                   String[] cassandraHosts, int cassandraPort, int kfactor, boolean inMemoryOnly,
-                  int cassandraMinConnections, int cassandraMaxConnections) {
-        this.block_tree_k = kfactor;
-        this.port = port;
+                  int cassandraMinConnections, int cassandraMaxConnections, InterfaceProvider interfaceProvider) {
+        this.block_tree_k_factor = kfactor;
+        this.timeCryptPort = timeCryptPort;
         this.aThreads = aThreads;
         this.cThreads = cThreads;
         this.wThreads = wThreads;
@@ -77,10 +75,10 @@ public class Server implements Runnable {
         this.blockCache = blockCache;
         this.cassandraHosts = cassandraHosts;
         this.cassandraPort = cassandraPort;
-        this.cluster = null;
         this.inMemoryOnly = inMemoryOnly;
         this.cassandraMinConnections = cassandraMinConnections;
         this.cassandraMaxConnections = cassandraMaxConnections;
+        this.interfaceProvider = interfaceProvider;
     }
 
     private static String getStringFromEnv(String envVarName, String defaultValue) throws RuntimeException {
@@ -119,12 +117,8 @@ public class Server implements Runnable {
         return val;
     }
 
-    private static int getIntFromEnv(String envVarName) throws RuntimeException {
-        return getIntFromEnv(envVarName, null);
-    }
-
     public static void main(String[] args) throws RuntimeException {
-        int port = getIntFromEnv("TIMECRYPT_PORT", DEFAULT_PORT);
+        int timecryptPort = getIntFromEnv("TIMECRYPT_PORT", DEFAULT_PORT);
         int aThreads = getIntFromEnv("TIMECRYPT_SERVER_GROUP_THREADS", 2);
         int cThreads = getIntFromEnv("TIMECRYPT_WORKER_GROUP_THREADS", 16);
         int wThreads = getIntFromEnv("TIMECRYPT_EVENT_EXECUTOR_THREADS", 32);
@@ -132,15 +126,16 @@ public class Server implements Runnable {
         int blockCache = getIntFromEnv("TIMECRYPT_BLOCK_CACHE", 1000);
         int kfactor = getIntFromEnv("TIMECRYPT_K_FACTOR", 64);
 
-        boolean inMemoryTree = getBoolFromEnv("TIMECRYPT_IN_MEMORY", false);
+        boolean inMemoryTree = getBoolFromEnv("TIMECRYPT_IN_MEMORY", true);
         String cassandraHost = getStringFromEnv("TIMECRYPT_CASSANDRA_HOST", "127.0.0.1");
-        int cassandraPort = getIntFromEnv("TIMECRYPT_CASSANDRA_PORT", 9042);
+        int cassandraPort = getIntFromEnv("TIMECRYPT_CASSANDRA_PORT", DEFAULT_CASSANDRA_PORT);
         String[] cassandraHosts = new String[]{cassandraHost};
         int cassandraMinConnections = getIntFromEnv("TIMECRYPT_CASSANDRA_MIN_CONNECTIONS", 2);
         int cassadndraMaxConnections = getIntFromEnv("TIMECRYPT_CASSANDRA_MAX_CONNECTIONS", 16);
+        InterfaceProvider implementation = determineImplementation();
 
         if (args.length >= 8) {
-            port = Integer.parseInt(args[0]);
+            timecryptPort = Integer.parseInt(args[0]);
             aThreads = Integer.parseInt(args[1]);
             cThreads = Integer.parseInt(args[2]);
             wThreads = Integer.parseInt(args[3]);
@@ -151,39 +146,122 @@ public class Server implements Runnable {
             System.arraycopy(args, 7, cassandraHosts, 0, cassandraHosts.length);
         }
 
-        Server server = new Server(port, aThreads, cThreads, wThreads, treeCache, blockCache, cassandraHosts, cassandraPort, kfactor,
-                inMemoryTree, cassandraMinConnections, cassadndraMaxConnections);
+        Server server = new Server(timecryptPort, aThreads, cThreads, wThreads, treeCache, blockCache, cassandraHosts, cassandraPort, kfactor,
+                inMemoryTree, cassandraMinConnections, cassadndraMaxConnections, implementation);
         server.run();
     }
 
-    public void run() {
+    private static InterfaceProvider determineImplementation() {
 
-        IBlockTreeFetcher blockTreeManager;
+        String implementation = System.getenv(SERVER_INTERFACE_ENVIRONMENT_VARIABLE);
+        InterfaceProvider interfaceProvider;
+
+        if (implementation == null) {
+            interfaceProvider = InterfaceProvider.GRPC_SERVER_INTERFACE;
+        } else {
+            LOGGER.info("Using the value from environment variable " + SERVER_INTERFACE_ENVIRONMENT_VARIABLE +
+                    " for selecting the right server interface.");
+
+            interfaceProvider = null;
+            for (InterfaceProvider value : InterfaceProvider.values()) {
+                if (value.getExplanation().equals(implementation)) {
+                    interfaceProvider = value;
+                }
+            }
+
+            if (interfaceProvider == null) {
+                interfaceProvider = InterfaceProvider.GRPC_SERVER_INTERFACE;
+                LOGGER.error("Could not identify the right server interface implementation based on the value" +
+                        implementation + " for selecting the right server interface. Falling back to " +
+                        interfaceProvider.name());
+            } else {
+                LOGGER.info("Selected " + interfaceProvider.name() + " as server interface - based on environment " +
+                        "variable");
+            }
+        }
+        return interfaceProvider;
+    }
+
+    public void run() {
+        IBlockTreeFetcher blockTreeFetcher = null;
+        ITreeManager treeManager = null;
+        IStorage storage = null;
 
         if (inMemoryOnly) {
-            blockTreeManager = new InMemoryCacheBlockTreeManager(blockCache);
-            manager = new TimeCryptRequestManager(new MemoryTreeManager(blockTreeManager, block_tree_k), new DebugStorage());
+            blockTreeFetcher = new InMemoryCacheBlockTreeManager(blockCache);
+            treeManager = new MemoryTreeManager(blockTreeFetcher, block_tree_k_factor);
+            storage = new DebugStorage();
         } else {
-            CassandraDatabaseManager db;
-            if(cluster == null) {
-                db = new CassandraDatabaseManager(cassandraHosts, cassandraPort
-                        , cassandraMinConnections, cassandraMaxConnections);
-
-            } else {
-                db = new CassandraDatabaseManager(cluster , cassandraMaxConnections);
-
+            try {
+                CassandraDatabaseManager db;
+                db = new CassandraDatabaseManager(cassandraHosts, cassandraPort, cassandraMaxConnections);
+                blockTreeFetcher = new CassandraBlockTreeManager(db, treeCache, blockCache);
+                treeManager = new CassandraTreeManager((CassandraBlockTreeManager) blockTreeFetcher, db, block_tree_k_factor);
+                storage = new CassandraStorage(db);
+            } catch (AllNodesFailedException e) {
+                LOGGER.error("Could not connect to cassandra", e);
+                System.exit(1);
             }
-            blockTreeManager = new CassandraBlockTreeManager(db, treeCache, blockCache);
-            manager = new TimeCryptRequestManager(new CassandraTreeManager((CassandraBlockTreeManager) blockTreeManager, db, block_tree_k),
-                    new CassandraStorage(db));
         }
 
+        if (interfaceProvider.equals(InterfaceProvider.NETTY_SERVER_INTERFACE)) {
+            runNettyServer(treeManager, storage);
+        } else {
+            runGrpcServer(treeManager, storage);
+        }
+    }
+
+    private void runGrpcServer(ITreeManager treeManager, IStorage storage) {
+
+        // TODO: check for nodelay
+        // TODO: configure worker groups
+
+        io.grpc.Server server = NettyServerBuilder.forPort(timeCryptPort)
+                .addService(new TimeCryptGRPCServer(treeManager, storage))
+                .intercept(new AuthServerInterceptor())
+                .build();
+        try {
+            server.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+            LOGGER.error("GRPC server exception", e);
+        }
+
+        LOGGER.info("Server started, listening on " + timeCryptPort);
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            io.grpc.Server server;
+
+            @Override
+            public void run() {
+                // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+                System.err.println("*** shutting down gRPC server since JVM is shutting down");
+                server.shutdown();
+                System.err.println("*** server shut down");
+            }
+
+            public Thread addServer(io.grpc.Server server) {
+                this.server = server;
+                return this;
+            }
+        }.addServer(server));
+
+        LOGGER.info("GRPC server started");
+
+        try {
+            server.awaitTermination();
+        } catch (InterruptedException e) {
+            LOGGER.error("GRPC server interrupted", e);
+        }
+        LOGGER.info("GRPC server terminated");
+    }
+
+    private void runNettyServer(ITreeManager treeManager, IStorage storage) {
         EventLoopGroup serverGroup = new NioEventLoopGroup(aThreads);
         EventLoopGroup workerGroup = new NioEventLoopGroup(cThreads);
         EventExecutorGroup group = new DefaultEventExecutorGroup(wThreads);
 
-
-        TimeCryptServerChannelInitializer initializer = new TimeCryptServerChannelInitializer(manager, group);
+        TimeCryptServerChannelInitializer initializer = new TimeCryptServerChannelInitializer(
+                new NettyRequestManager(treeManager, storage), group);
 
         try {
             ServerBootstrap bootStrap = new ServerBootstrap();
@@ -195,13 +273,31 @@ public class Server implements Runnable {
                     .childOption(ChannelOption.TCP_NODELAY, true);
 
             // Bind to port
-            bootStrap.bind(port).sync().channel().closeFuture().sync();
+            bootStrap.bind(timeCryptPort).sync().channel().closeFuture().sync();
         } catch (InterruptedException e) {
-            //e.printStackTrace();
+            LOGGER.error("Netty server interrupted", e);
         } finally {
             serverGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
             group.shutdownGracefully();
+        }
+        LOGGER.info("Netty server shut down");
+    }
+
+    public enum InterfaceProvider {
+
+        NETTY_SERVER_INTERFACE("NETTY_SERVER_INTERFACE"),
+        GRPC_SERVER_INTERFACE("GRPC_SERVER_INTERFACE"),
+        ;
+
+        private final String explanation;
+
+        InterfaceProvider(String s) {
+            this.explanation = s;
+        }
+
+        public String getExplanation() {
+            return explanation;
         }
     }
 }

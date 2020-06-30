@@ -75,7 +75,7 @@ class TimeCryptClientTest {
         long id = testClient.createStream("Test", "A test stream", streamPrecision,
                 Collections.singletonList(TimeUtil.Precision.TEN_SECONDS),
                 Arrays.asList(StreamMetaData.MetadataType.SUM, StreamMetaData.MetadataType.COUNT),
-                StreamMetaData.MetadataEncryptionSchema.LONG, null);
+                StreamMetaData.MetadataEncryptionScheme.LONG, null);
 
         assertEquals(1, testClient.listStreams().size());
         assertTrue(testClient.listStreams().containsKey(id));

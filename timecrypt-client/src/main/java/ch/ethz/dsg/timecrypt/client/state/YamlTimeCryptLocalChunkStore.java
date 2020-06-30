@@ -113,6 +113,11 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
     }
 
     @Override
+    public void setLastWrittenChunkId(long id) {
+        this.lastWrittenChunkId = id;
+    }
+
+    @Override
     public void addUnwrittenChunk(EncryptedChunk chunk, EncryptedDigest digest) throws CouldNotStoreException,
             ChunkOutOfOrderException {
         long newChunkId = chunk.getChunkId();

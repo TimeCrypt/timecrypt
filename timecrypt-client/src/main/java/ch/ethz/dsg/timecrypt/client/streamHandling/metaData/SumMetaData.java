@@ -14,12 +14,12 @@ import java.util.Collection;
  * Implements the SUM Metadata type.
  */
 class SumMetaData implements StreamMetaData {
-    private final MetadataEncryptionSchema encryptionSchema;
+    private final MetadataEncryptionScheme encryptionScheme;
     private final int id;
 
     @JsonCreator
-    public SumMetaData(MetadataEncryptionSchema encryptionSchema, int id) {
-        this.encryptionSchema = encryptionSchema;
+    public SumMetaData(MetadataEncryptionScheme encryptionScheme, int id) {
+        this.encryptionScheme = encryptionScheme;
         this.id = id;
     }
 
@@ -38,8 +38,8 @@ class SumMetaData implements StreamMetaData {
     }
 
     @Override
-    public MetadataEncryptionSchema getEncryptionSchema() {
-        return encryptionSchema;
+    public MetadataEncryptionScheme getEncryptionScheme() {
+        return encryptionScheme;
     }
 
     @Override

@@ -35,13 +35,13 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class ServerInterfaceTest {
 
-    // TODO: Tests for broken digests (not the right encryption schema used when trying to insert a digest)
+    // TODO: Tests for broken digests (not the right encryption scheme used when trying to insert a digest)
     // TODO: Tests for out of order inserts of chunks (should not be possible - destroy everything)
 
     private static ServerInterface testInterface;
     private static StreamKeyManager streamKeyManager;
-    private static Instant streamStartTime = Instant.parse("2020-02-06T10:00:00Z");
-    private static Clock streamStartClock = Clock.fixed(streamStartTime, ZoneOffset.UTC);
+    private static final Instant streamStartTime = Instant.parse("2020-02-06T10:00:00Z");
+    private static final Clock streamStartClock = Clock.fixed(streamStartTime, ZoneOffset.UTC);
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -89,7 +89,7 @@ public class ServerInterfaceTest {
         assertThrows(InvalidQueryException.class, () -> testInterface.getStatisticalData(13,
                 1, 2, 1, Collections.singletonList(
                         MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                                StreamMetaData.MetadataEncryptionSchema.LONG))));
+                                StreamMetaData.MetadataEncryptionScheme.LONG))));
     }
 
     @Test
@@ -102,11 +102,11 @@ public class ServerInterfaceTest {
         ids.add(testInterface.createStream(metaData));
 
         // test all possible of encryption and metadata types
-        for (StreamMetaData.MetadataEncryptionSchema schema : StreamMetaData.MetadataEncryptionSchema.values()) {
+        for (StreamMetaData.MetadataEncryptionScheme scheme : StreamMetaData.MetadataEncryptionScheme.values()) {
             metaData = new ArrayList<>();
 
             for (StreamMetaData.MetadataType type : StreamMetaData.MetadataType.values()) {
-                metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), type, schema));
+                metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), type, scheme));
                 ids.add(testInterface.createStream(metaData));
             }
         }
@@ -115,8 +115,8 @@ public class ServerInterfaceTest {
         StreamMetaData.MetadataType type = StreamMetaData.MetadataType.COUNT;
         metaData = new ArrayList<>();
 
-        for (StreamMetaData.MetadataEncryptionSchema schema : StreamMetaData.MetadataEncryptionSchema.values()) {
-            metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), type, schema));
+        for (StreamMetaData.MetadataEncryptionScheme scheme : StreamMetaData.MetadataEncryptionScheme.values()) {
+            metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), type, scheme));
             ids.add(testInterface.createStream(metaData));
         }
 
@@ -135,24 +135,24 @@ public class ServerInterfaceTest {
     public void creatStreamWithBadMetadata() {
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128));
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128_MAC));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128_MAC));
 
         assertThrows(CouldNotStoreException.class, () -> testInterface.createStream(metaData));
 
         // TODO: This should not be possible, should it?
         List<StreamMetaData> otherMetaData = new ArrayList<>();
         otherMetaData.add(MetaDataFactory.getMetadataOfType(7, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128));
         otherMetaData.add(MetaDataFactory.getMetadataOfType(13, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128_MAC));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128_MAC));
 
         assertThrows(CouldNotStoreException.class, () -> testInterface.createStream(otherMetaData));
 
         List<StreamMetaData> negativeMetaData = new ArrayList<>();
         negativeMetaData.add(MetaDataFactory.getMetadataOfType(-1, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128));
 
         assertThrows(CouldNotStoreException.class, () -> testInterface.createStream(negativeMetaData));
     }
@@ -161,9 +161,9 @@ public class ServerInterfaceTest {
     public void testChunkHandling() throws Exception {
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG_MAC));
+                StreamMetaData.MetadataEncryptionScheme.LONG_MAC));
         metaData.add(MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG));
+                StreamMetaData.MetadataEncryptionScheme.LONG));
 
         long id = testInterface.createStream(metaData);
 
@@ -185,7 +185,7 @@ public class ServerInterfaceTest {
         List<DataPoint> values;
 
         // go up to 1000 because our test stream has an interval size of 1 second.
-        for (long i = 0L; i < 1000; i++) {
+        for (long i = 0L; i < 100; i++) {
 
             values = new ArrayList<>();
             for (int j = 0; j <= i; j++) {
@@ -199,8 +199,8 @@ public class ServerInterfaceTest {
 
             assertEquals(i, testInterface.addChunk(id, aChunk, getEncryptedDigest(metaData, id, i, values)));
 
-            assertThat(insertedChunks, IsIterableContainingInAnyOrder.containsInAnyOrder(
-                    testInterface.getChunks(id, 0L, (i + 1)).toArray()));
+            List<EncryptedChunk> result = testInterface.getChunks(id, 0L, (i + 1));
+            assertThat(insertedChunks, IsIterableContainingInAnyOrder.containsInAnyOrder(result.toArray()));
 
             // Test arbitrary  sub ranges
             for (int lowerBound = 0; lowerBound < (i + 1); lowerBound++) {
@@ -217,9 +217,9 @@ public class ServerInterfaceTest {
     public void getLastWrittenChunkId() throws Exception {
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128));
         metaData.add(MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128_MAC));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128_MAC));
 
         long id = testInterface.createStream(metaData);
 
@@ -275,7 +275,7 @@ public class ServerInterfaceTest {
 
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG));
+                StreamMetaData.MetadataEncryptionScheme.LONG));
         long id = testInterface.createStream(metaData);
 
 
@@ -328,31 +328,31 @@ public class ServerInterfaceTest {
         // Less than zero ID
         assertThrows(InvalidQueryException.class, () -> testInterface.getStatisticalData(id,
                 0, 1, 1, Collections.singletonList(MetaDataFactory.getMetadataOfType(
-                        -1, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionSchema.LONG))));
+                        -1, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionScheme.LONG))));
 
         // This stream has no values with ID 2
         assertThrows(InvalidQueryException.class, () -> testInterface.getStatisticalData(id,
                 0, 1, 1, Collections.singletonList(MetaDataFactory.getMetadataOfType(
-                        2, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionSchema.LONG))));
+                        2, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionScheme.LONG))));
 
         // TODO: Should the clients realize that it is the wrong requested encryption?
         assertThrows(InvalidQueryException.class, () -> testInterface.getStatisticalData(id,
                 0, 1, 1, Collections.singletonList(MetaDataFactory.getMetadataOfType(
-                        0, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionSchema.BIG_INT_128))));
+                        0, StreamMetaData.MetadataType.COUNT, StreamMetaData.MetadataEncryptionScheme.BIG_INT_128))));
 
         testInterface.deleteStream(id);
     }
 
     @Test
-    public void getStatisticalDataForAllEncryptionSchemas() throws Exception {
+    public void getStatisticalDataForAllEncryptionSchemes() throws Exception {
         List<Long> ids = new ArrayList<>();
         List<StreamMetaData> metaData;
 
         // test all possible of encryption and metadata types
-        for (StreamMetaData.MetadataEncryptionSchema schema : StreamMetaData.MetadataEncryptionSchema.values()) {
+        for (StreamMetaData.MetadataEncryptionScheme scheme : StreamMetaData.MetadataEncryptionScheme.values()) {
             metaData = new ArrayList<>();
 
-            metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), StreamMetaData.MetadataType.COUNT, schema));
+            metaData.add(MetaDataFactory.getMetadataOfType(metaData.size(), StreamMetaData.MetadataType.COUNT, scheme));
             long id = testInterface.createStream(metaData);
             ids.add(id);
 
@@ -375,13 +375,17 @@ public class ServerInterfaceTest {
                     assertEquals(1, result.size());
                     assertEquals(1, result.get(0).getPayload().size());
 
+                    assertEquals(lowerBound, result.get(0).getChunkIdFrom());
+                    assertEquals((i + 1), result.get(0).getChunkIdTo());
+
                     List<Pair<StreamMetaData, Long>> resultValues = new Digest(id, result.get(0), streamKeyManager,
                             metaData).getValues();
 
                     assertEquals(1, resultValues.size());
                     assertEquals(metaData.get(0).getType(), resultValues.get(0).getLeft().getType());
-                    assertEquals(metaData.get(0).getEncryptionSchema(),
-                            resultValues.get(0).getLeft().getEncryptionSchema());
+
+                    assertEquals(metaData.get(0).getEncryptionScheme(),
+                            resultValues.get(0).getLeft().getEncryptionScheme());
                     assertEquals(metaData.get(0).getId(), resultValues.get(0).getLeft().getId());
 
                     assertEquals(metaData.get(0).calculate(values.subList((int) lowerBound, (int) (i + 1))),
@@ -400,7 +404,7 @@ public class ServerInterfaceTest {
     public void getStatisticalDataForDifferentGranularities() throws Exception {
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.BIG_INT_128_MAC));
+                StreamMetaData.MetadataEncryptionScheme.BIG_INT_128_MAC));
 
         long id = testInterface.createStream(metaData);
         int max = 1000;
@@ -462,7 +466,7 @@ public class ServerInterfaceTest {
     public void getStatisticalDataForPositiveAndNegativeValues() throws Exception {
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG_MAC));
+                StreamMetaData.MetadataEncryptionScheme.LONG_MAC));
 
         long id = testInterface.createStream(metaData);
 
@@ -497,8 +501,8 @@ public class ServerInterfaceTest {
             // default checks
             assertEquals(1, resultValues.size());
             assertEquals(metaData.get(0).getType(), resultValues.get(0).getLeft().getType());
-            assertEquals(metaData.get(0).getEncryptionSchema(),
-                    resultValues.get(0).getLeft().getEncryptionSchema());
+            assertEquals(metaData.get(0).getEncryptionScheme(),
+                    resultValues.get(0).getLeft().getEncryptionScheme());
             assertEquals(metaData.get(0).getId(), resultValues.get(0).getLeft().getId());
 
             assertEquals(metaData.get(0).calculate(values), resultValues.get(0).getRight());
@@ -512,9 +516,9 @@ public class ServerInterfaceTest {
 
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG_MAC));
+                StreamMetaData.MetadataEncryptionScheme.LONG_MAC));
         metaData.add(MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG));
+                StreamMetaData.MetadataEncryptionScheme.LONG));
 
         long id = testInterface.createStream(metaData);
 
@@ -543,10 +547,10 @@ public class ServerInterfaceTest {
                 assertEquals(metaData.get(0).getType(), resultValues.get(0).getLeft().getType());
                 assertEquals(metaData.get(1).getType(), resultValues.get(1).getLeft().getType());
 
-                assertEquals(metaData.get(0).getEncryptionSchema(),
-                        resultValues.get(0).getLeft().getEncryptionSchema());
-                assertEquals(metaData.get(1).getEncryptionSchema(),
-                        resultValues.get(1).getLeft().getEncryptionSchema());
+                assertEquals(metaData.get(0).getEncryptionScheme(),
+                        resultValues.get(0).getLeft().getEncryptionScheme());
+                assertEquals(metaData.get(1).getEncryptionScheme(),
+                        resultValues.get(1).getLeft().getEncryptionScheme());
 
                 assertEquals(metaData.get(0).getId(), resultValues.get(0).getLeft().getId());
                 assertEquals(metaData.get(1).getId(), resultValues.get(1).getLeft().getId());
@@ -567,13 +571,13 @@ public class ServerInterfaceTest {
 
         List<StreamMetaData> metaData = new ArrayList<>();
         metaData.add(MetaDataFactory.getMetadataOfType(0, StreamMetaData.MetadataType.SUM,
-                StreamMetaData.MetadataEncryptionSchema.LONG_MAC));
+                StreamMetaData.MetadataEncryptionScheme.LONG_MAC));
         metaData.add(MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG));
+                StreamMetaData.MetadataEncryptionScheme.LONG));
 
         List<StreamMetaData> requestMetaData = new ArrayList<>();
         requestMetaData.add(MetaDataFactory.getMetadataOfType(1, StreamMetaData.MetadataType.COUNT,
-                StreamMetaData.MetadataEncryptionSchema.LONG));
+                StreamMetaData.MetadataEncryptionScheme.LONG));
 
         long id = testInterface.createStream(metaData);
 
@@ -600,8 +604,8 @@ public class ServerInterfaceTest {
                 assertEquals(1, resultValues.size());
                 assertEquals(metaData.get(1).getType(), resultValues.get(0).getLeft().getType());
 
-                assertEquals(metaData.get(1).getEncryptionSchema(),
-                        resultValues.get(0).getLeft().getEncryptionSchema());
+                assertEquals(metaData.get(1).getEncryptionScheme(),
+                        resultValues.get(0).getLeft().getEncryptionScheme());
 
                 assertEquals(metaData.get(1).getId(), resultValues.get(0).getLeft().getId());
 
@@ -609,7 +613,6 @@ public class ServerInterfaceTest {
                         resultValues.get(0).getRight());
             }
         }
-
         testInterface.deleteStream(id);
     }
 
@@ -638,6 +641,6 @@ public class ServerInterfaceTest {
             encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata, values, streamKeyManager,
                     chunkId));
         }
-        return new EncryptedDigest(streamId, chunkId, chunkId, encryptedMetaData);
+        return new EncryptedDigest(streamId, chunkId, chunkId + 1, encryptedMetaData);
     }
 }
