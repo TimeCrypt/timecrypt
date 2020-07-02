@@ -33,7 +33,7 @@ public class TestServerBasic {
     private static String[] cassandraHost;
     private static int cassandraPort;
 
-    @BeforeClass
+    //@BeforeClass
     public static void startServer() {
         // memory limit memory to 2 GB since cassandra somehow eats 5GB
         cassandra = new GenericContainer<>("cassandra:3.11")
@@ -60,7 +60,7 @@ public class TestServerBasic {
         }
     }
 
-    @AfterClass
+    //@AfterClass
     public static void stopServer() throws InterruptedException {
         server.interrupt();
         try {
@@ -73,7 +73,7 @@ public class TestServerBasic {
         cassandra.stop();
     }
 
-    @Test
+    //@Test
     public void testTree() throws Exception {
         DebugBlockTreeManager man = new DebugBlockTreeManager();
         BlockTree tree = man.createTree(1, "1", 2, 1);
@@ -87,7 +87,7 @@ public class TestServerBasic {
 //        System.out.println(cont.i);
     }
 
-    @Test
+    //@Test
     public void testTreeSum() throws Exception {
         int iter = 100;
         DebugBlockTreeManager man = new DebugBlockTreeManager();
@@ -105,7 +105,7 @@ public class TestServerBasic {
         }
     }
 
-    @Test
+    //@Test
     public void testTreeCassandra() throws Exception {
         CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
@@ -120,7 +120,7 @@ public class TestServerBasic {
         //       System.out.println(cont.i);
     }
 
-    @Test
+    //@Test
     public void testTreeCassandraSum() throws Exception {
         CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
@@ -150,7 +150,7 @@ public class TestServerBasic {
         }
     }
 
-    @Test
+    //@Test
     public void testTreeCassandraInsertFlush() throws Exception {
         CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 10, 10000);
@@ -171,7 +171,7 @@ public class TestServerBasic {
         }
     }
 
-    @Test
+    //@Test
     public void testTreeCassandraInsertSmallCache() throws Exception {
         CassandraDatabaseManager db = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man = new CassandraBlockTreeManager(db, 1, 1);
@@ -192,7 +192,7 @@ public class TestServerBasic {
         }
     }
 
-    @Test
+    //@Test
     public void testTreeCassandraPar() throws Exception {
         CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
         CassandraBlockTreeManager man1 = new CassandraBlockTreeManager(db1, 10, 10000);
@@ -222,7 +222,7 @@ public class TestServerBasic {
         assertTrue(task.success);
     }
 
-    @Test
+    //@Test
     public void testTreeCassandraParInsert() throws Exception {
         String user = "6";
         CassandraDatabaseManager db1 = new CassandraDatabaseManager(cassandraHost, cassandraPort, 1);
@@ -255,7 +255,7 @@ public class TestServerBasic {
         }
     }
 
-    @Test
+    //@Test
     public void basicClient() throws IOException {
         String user = "User1";
         int num = 100;
@@ -289,7 +289,7 @@ public class TestServerBasic {
         client.close();
     }
 
-    @Test
+    //@Test
     public void basicClientRand() throws IOException {
         Random rand = new Random(111);
         int numValues = 1024;
