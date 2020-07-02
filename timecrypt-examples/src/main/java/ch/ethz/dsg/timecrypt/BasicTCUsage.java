@@ -24,7 +24,7 @@ import java.util.*;
 public class BasicTCUsage {
 
     private static final String DUMMY_PASSWORD = "asdfghjklasdfghjkl";
-    private static final String SERVER_ADDRESS = "172.17.0.1";
+    private static String SERVER_ADDRESS = "172.17.0.1";
     private static final int SERVER_PORT = 15000;
     private static final int TIME_MINUTES_BEFORE_NOW = 10;
     private static final int MIN_TO_MS = 60 * 1000;
@@ -115,6 +115,8 @@ public class BasicTCUsage {
 
     public static void main(String[] args) {
         try {
+            if (args.length > 0)
+                SERVER_ADDRESS = args[0];
             basicDemo();
         } catch (Exception e) {
             e.printStackTrace();

@@ -113,6 +113,10 @@ To use the driver, add the following library to your project.
 </dependency>
 ```
 Example of how to use the library.
+```
+timecrypt-examples/scripts/run_example1.sh
+```
+Runs the example.
 Create a `TimeCryptClient` object to interact with a TimeCrypt server.
 ```java 
 TimeCryptProfile profile = new LocalTimeCryptProfile(null, "myUser", "..", SERVER_ADDRESS, SERVER_PORT);
