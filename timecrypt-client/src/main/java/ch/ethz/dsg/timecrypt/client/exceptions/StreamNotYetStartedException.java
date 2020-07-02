@@ -14,7 +14,7 @@ import java.util.Date;
  * Streams always start at the next ful minute - therefore it might occur that they start after it is tried to
  * write the first value
  */
-public class StreamNotYetStartedException extends Exception {
+public class StreamNotYetStartedException extends TCWriteException {
 
     private final Date dataTimestamp;
     private final Date streamTimestamp;

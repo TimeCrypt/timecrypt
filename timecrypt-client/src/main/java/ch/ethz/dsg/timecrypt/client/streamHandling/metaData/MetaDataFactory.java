@@ -7,7 +7,6 @@ package ch.ethz.dsg.timecrypt.client.streamHandling.metaData;
 
 
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
-import ch.ethz.dsg.timecrypt.client.streamHandling.Chunk;
 import ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint;
 import ch.ethz.dsg.timecrypt.crypto.encryption.*;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
@@ -111,7 +110,7 @@ public class MetaDataFactory {
     public static EncryptedMetadata getEncryptedMetadataForValue(StreamMetaData metadata, Collection<DataPoint> value,
                                                                  StreamKeyManager streamKeyManager, long chunkId) {
         EncryptedMetadata encryptedMetadata;
-                LOGGER.debug("starting to encrypt metadata " + metadata.getId() + " in " + chunkId);
+        LOGGER.debug("starting to encrypt metadata " + metadata.getId() + " in " + chunkId);
         switch (metadata.getEncryptionScheme()) {
             case LONG:
                 encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).

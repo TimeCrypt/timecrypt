@@ -10,7 +10,7 @@ import java.util.Date;
 /**
  * Exception that occurs when some process tried to write to the wrong chunk.
  */
-public class WrongChunkException extends Exception {
+public class WrongChunkException extends TCWriteException {
 
     /**
      * Create a new exception for a value that was tried to write to a chunk that does not contain its corresponding

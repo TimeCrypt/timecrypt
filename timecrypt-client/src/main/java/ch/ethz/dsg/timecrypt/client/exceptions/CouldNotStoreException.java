@@ -9,7 +9,7 @@ package ch.ethz.dsg.timecrypt.client.exceptions;
  * Exception that gets raised if something went wrong in the server communication and an asset
  * could not be stored or in general if a operation could not be persisted.
  */
-public class CouldNotStoreException extends Exception {
+public class CouldNotStoreException extends TCWriteException {
 
     public CouldNotStoreException(String reason) {
         super(reason);

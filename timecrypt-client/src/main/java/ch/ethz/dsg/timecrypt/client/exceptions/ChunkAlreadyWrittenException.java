@@ -11,7 +11,7 @@ import java.util.Date;
  * Exception that occurs when it is tried to write a value to a chunk that was already encrypted and is therefore
  * not writable anymore.
  */
-public class ChunkAlreadyWrittenException extends Exception {
+public class ChunkAlreadyWrittenException extends TCWriteException {
 
     private final Date timestamp;
     private final long value;

@@ -7,42 +7,40 @@ package ch.ethz.dsg.timecrypt.client.streamHandling;
 
 import ch.ethz.dsg.timecrypt.client.exceptions.ChunkAlreadyWrittenException;
 import ch.ethz.dsg.timecrypt.client.exceptions.CouldNotStoreException;
-import ch.ethz.dsg.timecrypt.client.exceptions.DuplicateDataPointException;
-import ch.ethz.dsg.timecrypt.client.exceptions.WrongChunkException;
+import ch.ethz.dsg.timecrypt.client.exceptions.TCWriteException;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedChunk;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest;
-import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.serverInterface.ServerInterface;
-import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
-import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 
-public class BackupHandler {
+public class BackupHandler implements InsertHandler {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ChunkHandler.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TCWriteHandler.class);
 
-    private Stream associatedStream;
-    private StreamKeyManager streamKeyManager;
-    private ServerInterface serverInterface;
+    private final Stream associatedStream;
+    private final StreamKeyManager streamKeyManager;
+    private final ServerInterface serverInterface;
+    private final List<InsertHandler> openHandlers;
 
     private Chunk curChunk;
 
-    public BackupHandler(Stream associatedStream, StreamKeyManager streamKeyManager, ServerInterface serverInterface, Date backupStartDate) {
+    public BackupHandler(Stream associatedStream, StreamKeyManager streamKeyManager, ServerInterface serverInterface, Date backupStartDate, List<InsertHandler> openHandlers) {
         this.associatedStream = associatedStream;
         this.streamKeyManager = streamKeyManager;
         this.serverInterface = serverInterface;
         this.curChunk = new Chunk(associatedStream, TimeUtil.getChunkIdAtTime(associatedStream, backupStartDate.getTime()));
-
+        this.openHandlers = openHandlers;
+        this.openHandlers.add(this);
     }
 
-    public void putDataPoint(DataPoint dataPoint) throws ChunkAlreadyWrittenException, WrongChunkException, DuplicateDataPointException {
+    @Override
+    public void writeDataPointToStream(DataPoint dataPoint) throws TCWriteException {
         long chunkId = TimeUtil.getChunkIdAtTime(associatedStream, dataPoint.getTimestamp().getTime());
         if (chunkId < curChunk.getChunkID()) {
             throw new ChunkAlreadyWrittenException(dataPoint.getTimestamp(), dataPoint.getValue(), "Backup Chunk already written");
@@ -57,29 +55,35 @@ public class BackupHandler {
         }
     }
 
+    @Override
     public void flush() {
         sendChunk(curChunk);
-        curChunk = new Chunk(associatedStream, curChunk.getChunkID() + 1);;
+        curChunk = new Chunk(associatedStream, curChunk.getChunkID() + 1);
+        ;
+    }
+
+    @Override
+    public void terminate() throws InterruptedException {
+        this.flush();
+        this.openHandlers.remove(this);
+    }
+
+    @Override
+    public long getStreamID() {
+        return this.associatedStream.getId();
     }
 
     private void sendChunk(Chunk curChunk) {
         long chunkId = curChunk.getChunkID();
         LOGGER.debug("Finalizing chunk " + chunkId);
         curChunk.finalizeChunk();
-        List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
-        LOGGER.debug("Encrypting metadata for chunk " + chunkId);
-        for (StreamMetaData metadata : associatedStream.getMetaData()) {
-            encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
-                    curChunk.getValues(), streamKeyManager, chunkId));
-        }
-        EncryptedDigest digest = new EncryptedDigest(associatedStream.getId(), chunkId, chunkId + 1,
-                encryptedMetaData);
+        EncryptedDigest digest = Encryption.encryptMetadata(associatedStream.getMetaData(), streamKeyManager,
+                curChunk.getValues(), associatedStream.getId(), chunkId);
 
         EncryptedChunk encryptedChunk;
         try {
             LOGGER.debug("Encrypting chunk " + chunkId);
-            encryptedChunk = new EncryptedChunk(associatedStream.getId(), chunkId,
-                    curChunk.encrypt(streamKeyManager));
+            encryptedChunk = Encryption.encryptChunk(curChunk, streamKeyManager, associatedStream.getId(), chunkId);
         } catch (Exception e) {
             LOGGER.error("Could not encrypt chunk.", e);
             // TODO: raise a useful exception.

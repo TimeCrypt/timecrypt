@@ -9,7 +9,7 @@ package ch.ethz.dsg.timecrypt.client.exceptions;
  * Exception that occurs when it is tried to write a value to a chunk that was already encrypted and is therefore
  * not writable anymore.
  */
-public class ChunkOutOfOrderException extends Exception {
+public class ChunkOutOfOrderException extends TCWriteException {
 
     private final long chunkID;
     private final long nextChunkId;

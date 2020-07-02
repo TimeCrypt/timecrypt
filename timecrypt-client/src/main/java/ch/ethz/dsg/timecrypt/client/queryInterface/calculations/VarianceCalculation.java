@@ -47,7 +47,7 @@ public class VarianceCalculation implements Calculation {
             throw new QueryNeedsChunkScanException(QueryNeedsChunkScanException.ChunkScanReason.
                     NOT_ENOUGH_METADATA_IN_STREAM, "Count in metadata: " + countExisting + " square in metadata: " +
                     squareExisting);
-        } else if(! squareExisting || ! countExisting  || ! sumExisting) {
+        } else if (!squareExisting || !countExisting || !sumExisting) {
             query.activateChunkScan();
         }
         return query;

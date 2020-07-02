@@ -41,7 +41,7 @@ public class AverageCalculation implements Calculation {
             throw new QueryNeedsChunkScanException(QueryNeedsChunkScanException.ChunkScanReason.
                     NOT_ENOUGH_METADATA_IN_STREAM, "Count in metadata: " + countExisting + " sum in metadata: " +
                     sumExisting);
-        } else if(! sumExisting || ! countExisting) {
+        } else if (!sumExisting || !countExisting) {
             query.activateChunkScan();
         }
         return query;

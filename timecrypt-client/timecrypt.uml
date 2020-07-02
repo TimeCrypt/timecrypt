@@ -11,7 +11,7 @@
     <node x="157.43738559340665" y="730.0">ch.ethz.dsg.timecrypt.client.queryInterface.calculations.Calculation</node>
     <node x="218.26150571620332" y="922.0">ch.ethz.dsg.timecrypt.client.queryInterface.Query</node>
     <node x="537.346343747937" y="466.0">ch.ethz.dsg.timecrypt.client.streamHandling.Stream</node>
-    <node x="898.5372528388461" y="922.0">ch.ethz.dsg.timecrypt.client.streamHandling.ChunkHandler</node>
+    <node x="898.5372528388461" y="922.0">ch.ethz.dsg.timecrypt.client.streamHandling.TCWriteHandler</node>
     <node x="320.93738559340665" y="102.0">ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint</node>
     <node x="613.3040522600734" y="102.0">ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest</node>
     <node x="99.49620912281841" y="618.0">ch.ethz.dsg.timecrypt.client.streamHandling.Digest</node>

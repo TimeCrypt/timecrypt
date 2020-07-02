@@ -91,18 +91,19 @@ class TimeCryptClientTest {
         assertTrue(0 > testStream.getLastWrittenChunkId());
         assertEquals("Test", testStream.getName());
 
-        ChunkHandler.setClock(streamStartClock);
+        TCWriteHandler.setClock(streamStartClock);
 
         Date dataPointDate = new Date(Instant.now(Clock.offset(streamStartClock, Duration.ofMillis(1))).toEpochMilli());
         long dataPointValue = 1;
-        testClient.addDataPointToStream(id, new DataPoint(dataPointDate, dataPointValue));
+        InsertHandler handler = testClient.getHandlerForLiveInsert(id);
+        handler.writeDataPointToStream(new DataPoint(dataPointDate, dataPointValue));
 
         // Sleep for a second so the chunk handler thread is clearly up and running - otherwise terminating it instantly
         // can lead to a situation that it terminated before ever trying to send chunks
         Thread.sleep(1000);
 
         // we terminate the client so everything gets written
-        testClient.terminate();
+        handler.terminate();
 
         long nrOfWrittenChunks = TimeCryptClient.CHUNK_WRITE_WINDOW.getMillis() / testStream.getChunkSize();
         long maxChunkId = nrOfWrittenChunks - 1;

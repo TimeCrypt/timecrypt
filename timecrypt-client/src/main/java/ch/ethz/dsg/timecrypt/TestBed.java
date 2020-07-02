@@ -11,6 +11,7 @@ import ch.ethz.dsg.timecrypt.client.state.LocalTimeCryptProfile;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptKeystore;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptProfile;
 import ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint;
+import ch.ethz.dsg.timecrypt.client.streamHandling.InsertHandler;
 import ch.ethz.dsg.timecrypt.client.streamHandling.Stream;
 import ch.ethz.dsg.timecrypt.client.streamHandling.TimeUtil;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
@@ -282,9 +283,6 @@ public class TestBed implements Callable<Integer> {
         }
         log("Finished waiting for threads");
 
-        timeCryptClient.terminate();
-        log("TimeCrypt terminated");
-
         if (delete) {
             if (streamsCreated) {
                 log("Deleting created streams");
@@ -312,20 +310,20 @@ public class TestBed implements Callable<Integer> {
     private static class InsertionThread implements Runnable {
         private final Random r = new Random();
         private final int numInserts;
-        private final TimeCryptClient timeCryptClient;
         private final long streamId;
         private final int min;
         private final int max;
         private final int frequency;
+        private final InsertHandler insertHandler;
 
         private InsertionThread(TimeCryptClient timeCryptClient, int numInserts, long streamId, int min,
                                 int max, int frequency) {
             this.numInserts = numInserts;
-            this.timeCryptClient = timeCryptClient;
             this.streamId = streamId;
             this.min = min;
             this.max = max;
             this.frequency = frequency;
+            this.insertHandler = timeCryptClient.getHandlerForLiveInsert(streamId);
         }
 
         @Override
@@ -335,7 +333,7 @@ public class TestBed implements Callable<Integer> {
                 log("Adding value " + rnd + " to Stream " + streamId + " (" + i + "/" + numInserts + ")");
 
                 try {
-                    timeCryptClient.addDataPointToStream(streamId, new DataPoint(new Date(), rnd));
+                    insertHandler.writeDataPointToStream(new DataPoint(new Date(), rnd));
                 } catch (StreamNotYetStartedException e) {
                     log("Stream " + streamId + " not yet started. " + e.getMessage());
                 } catch (Exception e) {
@@ -349,7 +347,16 @@ public class TestBed implements Callable<Integer> {
                     return;
                 }
             }
+            try {
+                insertHandler.terminate();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             log("Finished adding values to Stream " + streamId);
         }
+
+
     }
+
+
 }

@@ -1,7 +1,6 @@
 package ch.ethz.dsg.timecrypt;
 
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
-import ch.ethz.dsg.timecrypt.protocol.EncryptionScheme;
 
 import java.util.Arrays;
 import java.util.List;
@@ -9,7 +8,7 @@ import java.util.List;
 public class DefaultConfigs {
 
     public static List<StreamMetaData.MetadataType> getDefaultMetaDataConfig() {
-        return  Arrays.asList(
+        return Arrays.asList(
                 StreamMetaData.MetadataType.SUM,
                 StreamMetaData.MetadataType.COUNT,
                 StreamMetaData.MetadataType.SQUARE);

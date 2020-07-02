@@ -9,36 +9,37 @@ import ch.ethz.dsg.timecrypt.client.exceptions.UnsupportedOperationException;
 import ch.ethz.dsg.timecrypt.client.exceptions.*;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedChunk;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest;
-import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.serverInterface.ServerInterface;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptLocalChunkStore;
-import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
-import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
-import java.util.*;
+import java.util.Date;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static ch.ethz.dsg.timecrypt.client.streamHandling.TimeUtil.getChunkIdAtTime;
 
 /**
- * Handles chunks
+ * Handles live inserts e.g. from a a sensor
  */
-public class ChunkHandler implements Runnable {
+public class TCWriteHandler implements Runnable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(ChunkHandler.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TCWriteHandler.class);
     private static Clock clock = Clock.systemDefaultZone();
     private final long writeWindowMillis;
-    private final Stream associatedStream;
+    final Stream associatedStream;
     private final StreamKeyManager streamKeyManager;
     private final ServerInterface serverInterface;
     private final SortedMap<Long, Chunk> unwrittenChunks;
     private boolean terminating = false;
+    private final AtomicBoolean flush = new AtomicBoolean(false);
 
-    public ChunkHandler(Stream associatedStream, StreamKeyManager streamKeyManager, ServerInterface serverInterface, long write_window_millis) {
+    public TCWriteHandler(Stream associatedStream, StreamKeyManager streamKeyManager, ServerInterface serverInterface, long write_window_millis) {
         this.associatedStream = associatedStream;
         this.streamKeyManager = streamKeyManager;
         writeWindowMillis = write_window_millis;
@@ -47,7 +48,7 @@ public class ChunkHandler implements Runnable {
     }
 
     public static void setClock(Clock clock) {
-        ChunkHandler.clock = clock;
+        TCWriteHandler.clock = clock;
     }
 
     private Chunk getChunkAtTime(DataPoint dataPoint) throws StreamNotYetStartedException,
@@ -75,9 +76,7 @@ public class ChunkHandler implements Runnable {
         return theChunk;
     }
 
-    public void putDataPoint(DataPoint dataPoint) throws ChunkAlreadyWrittenException,
-            DataPointOutsideOfWriteWindowException, StreamNotYetStartedException,
-            DuplicateDataPointException {
+    public synchronized void putDataPoint(DataPoint dataPoint) throws TCWriteException {
         synchronized (this.associatedStream) {
             if (terminating) {
                 throw new ChunkAlreadyWrittenException(dataPoint.getTimestamp(), dataPoint.getValue(), "Can not write " +
@@ -105,6 +104,13 @@ public class ChunkHandler implements Runnable {
         synchronized (this.associatedStream) {
             terminating = true;
         }
+        synchronized (this) {
+            this.notify();
+        }
+    }
+
+    public void flush() {
+        this.flush.compareAndSet(false, true);
     }
 
     /**
@@ -201,10 +207,22 @@ public class ChunkHandler implements Runnable {
             }
 
             LOGGER.debug("Taking care of unwritten chunks.");
-            for (long chunkId = (associatedStream.getLastWrittenChunkId() + 1); chunkId < maxSendChunkId; chunkId++) {
-                Chunk curChunk = unwrittenChunks.get(chunkId);
-                if ((curChunk.getEndTime() + writeWindowMillis) < now) {
+            if (this.flush.getAndSet(false)) {
+                synchronized (unwrittenChunks) {
+                    for (long chunkId = (associatedStream.getLastWrittenChunkId() + 1); chunkId < maxSendChunkId; chunkId++) {
+                        Chunk curChunk = unwrittenChunks.get(chunkId);
+                        if (curChunk.getEndTime() < now)
+                            sendChunk(chunkStore, chunkId, curChunk);
+                    }
+                }
+            }
 
+            for (long chunkId = (associatedStream.getLastWrittenChunkId() + 1); chunkId < maxSendChunkId; chunkId++) {
+                Chunk curChunk = null;
+                synchronized (unwrittenChunks) {
+                    curChunk = unwrittenChunks.get(chunkId);
+                }
+                if (curChunk != null && (curChunk.getEndTime() + writeWindowMillis) < now) {
                     // sanity check
                     if (chunkId != curChunk.getChunkID()) {
                         throw new RuntimeException("ChunkID got inconsistent in ChunkHandler. Assuming chunk has ID " +
@@ -253,21 +271,14 @@ public class ChunkHandler implements Runnable {
     private void sendChunk(TimeCryptLocalChunkStore chunkStore, long chunkId, Chunk curChunk) {
         LOGGER.debug("Finalizing chunk " + chunkId);
         curChunk.finalizeChunk();
-        List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
         LOGGER.debug("Encrypting metadata for chunk " + chunkId);
-
-        for (StreamMetaData metadata : associatedStream.getMetaData()) {
-            encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
-                    curChunk.getValues(), streamKeyManager, chunkId));
-        }
-        EncryptedDigest digest = new EncryptedDigest(associatedStream.getId(), chunkId, chunkId + 1,
-                encryptedMetaData);
+        EncryptedDigest digest = Encryption.encryptMetadata(associatedStream.getMetaData(), streamKeyManager,
+                curChunk.getValues(), associatedStream.getId(), chunkId);
 
         EncryptedChunk encryptedChunk;
         try {
             LOGGER.debug("Encrypting chunk " + chunkId);
-            encryptedChunk = new EncryptedChunk(associatedStream.getId(), chunkId,
-                    curChunk.encrypt(streamKeyManager));
+            encryptedChunk = Encryption.encryptChunk(curChunk, streamKeyManager, associatedStream.getId(), chunkId);
         } catch (Exception e) {
             LOGGER.error("Could not encrypt chunk.", e);
             // TODO: raise a useful exception.

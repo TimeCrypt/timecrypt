@@ -52,8 +52,8 @@ public class Interval {
     /**
      * Constructor that operates on epoch millis.
      *
-     * @param from  The start of the interval in epoch millis.
-     * @param to    The end of the interval in epoch millis.
+     * @param from   The start of the interval in epoch millis.
+     * @param to     The end of the interval in epoch millis.
      * @param values The values in the interval.
      */
     public Interval(long from, long to, List<Double> values) {
@@ -65,13 +65,14 @@ public class Interval {
     /**
      * Constructor that operates on epoch millis.
      *
-     * @param from  The start of the interval in epoch millis.
-     * @param to    The end of the interval in epoch millis.
+     * @param from   The start of the interval in epoch millis.
+     * @param to     The end of the interval in epoch millis.
      * @param values The values in the interval.
      */
     public Interval(Date from, Date to, List<Double> values) {
         this.from = from;
-        this.to = to;;
+        this.to = to;
+        ;
         this.values = values;
     }
 

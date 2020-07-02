@@ -133,7 +133,7 @@ public class Chunk {
     public byte[] encrypt(StreamKeyManager streamKeyManager) throws Exception {
         LOGGER.debug("starting to encrypt chunk " + this.chunkID);
         byte[] valueBytes = SerializationUtils.serialize(values);
-        byte [] bytes = TimeCryptChunkEncryption.encryptAESGcm(streamKeyManager.getChunkKeyRegression().getSeed(chunkID), valueBytes);
+        byte[] bytes = TimeCryptChunkEncryption.encryptAESGcm(streamKeyManager.getChunkKeyRegression().getSeed(chunkID), valueBytes);
         LOGGER.debug("starting to encrypt finished encrypting chunk " + this.chunkID);
         return bytes;
     }

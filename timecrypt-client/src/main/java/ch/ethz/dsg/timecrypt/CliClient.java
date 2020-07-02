@@ -485,7 +485,7 @@ public class CliClient {
 
         terminal.println();
         terminal.println("Shutting down... ");
-        timeCryptClient.terminate();
+        timeCryptClient.terminateAllHandlers();
         terminal.println("... shutdown complete.");
     }
 
@@ -498,7 +498,7 @@ public class CliClient {
         if (stream != null) {
             long value = textIO.newLongInputReader().read("Value at data point: ");
             try {
-                timeCryptClient.addDataPointToStream(stream.getId(), new DataPoint(new Date(), value));
+                timeCryptClient.addDataPointLiveToStream(stream.getId(), new DataPoint(new Date(), value));
             } catch (Exception e) {
                 LOGGER.error("Error adding data point to chunk ", e);
                 terminal.printf("... could not add data point to stream: " + e.getMessage());

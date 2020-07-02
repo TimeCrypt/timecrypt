@@ -10,7 +10,7 @@ import java.util.Date;
 /**
  * Exception that occurs when a value at a given time in a chunk is already written.
  */
-public class DuplicateDataPointException extends Exception {
+public class DuplicateDataPointException extends TCWriteException {
 
     private final Date timestamp;
     private final long oldValue;

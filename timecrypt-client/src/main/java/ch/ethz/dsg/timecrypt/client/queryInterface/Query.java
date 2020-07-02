@@ -117,7 +117,7 @@ public class Query {
      * @param serverInterface  The server to perform the query on.
      * @param from             The start time of the query the query. Results will INCLUDE values at this exact timestamp.
      * @param to               The end time of the query the query. Results will EXCLUDE values at this exact timestamp.
-     * @param queryOps          The kind of querys to execute.
+     * @param queryOps         The kind of querys to execute.
      * @param allowChunkScan   Should the query be performed on the individual chunks rather than the aggregation
      *                         indexes if there are no values in the aggregation indexes?
      * @return An interval object with the query result.
@@ -223,7 +223,7 @@ public class Query {
     public static List<Interval> performQueryForRange(Stream stream, StreamKeyManager streamKeyManager, ServerInterface
             serverInterface, Date from, Date to, SupportedOperation queryOp, long precision, boolean allowChunkScan)
             throws InvalidQueryIntervalException, InvalidQueryException, QueryNeedsChunkScanException, QueryFailedException {
-        return  performQueryForRange(stream, streamKeyManager, serverInterface, from, to,
+        return performQueryForRange(stream, streamKeyManager, serverInterface, from, to,
                 Collections.singletonList(queryOp), precision, allowChunkScan);
     }
 
@@ -303,7 +303,7 @@ public class Query {
                 for (Calculation calculation : calculations) {
                     res.add(calculation.performOnDataPoints(currentDataPoints));
                 }
-                result.add(new Interval(i, top - 1, res));
+                result.add(new Interval(i, top, res));
 
             }
         } else if (query.isMixedResult()) {
@@ -320,7 +320,6 @@ public class Query {
 
             for (long i = query.getDigestFrom(); i < query.getDigestTo(); i = TimeUtil.getChunkIdAtTime(stream,
                     TimeUtil.getChunkStartTime(stream, i) + precision)) {
-
                 // TODO given enough tests this might be removed - for now it's only sanitizing what the server send
                 Digest peek = digests.next();
                 if (peek != null) {
@@ -335,7 +334,7 @@ public class Query {
                 for (Calculation calculation : calculations) {
                     res.add(calculation.performOnDigests(Collections.singletonList(peek)));
                 }
-                result.add(new Interval(TimeUtil.getChunkStartTime(stream, i), TimeUtil.getChunkEndTime(stream, i), res));
+                result.add(new Interval(TimeUtil.getChunkStartTime(stream, i), TimeUtil.getChunkStartTime(stream, i) + precision, res));
             }
         }
         return result;

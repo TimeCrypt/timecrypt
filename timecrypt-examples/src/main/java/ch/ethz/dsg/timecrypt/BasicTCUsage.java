@@ -12,8 +12,8 @@ import ch.ethz.dsg.timecrypt.client.state.LocalTimeCryptKeystore;
 import ch.ethz.dsg.timecrypt.client.state.LocalTimeCryptProfile;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptKeystore;
 import ch.ethz.dsg.timecrypt.client.state.TimeCryptProfile;
-import ch.ethz.dsg.timecrypt.client.streamHandling.BackupHandler;
 import ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint;
+import ch.ethz.dsg.timecrypt.client.streamHandling.InsertHandler;
 import ch.ethz.dsg.timecrypt.client.streamHandling.TimeUtil;
 
 import java.util.*;
@@ -59,19 +59,21 @@ public class BasicTCUsage {
 
         // Start a backup handler because, we have to insert data from the past
         System.out.format("Insert data from the past %s until now\n", new Date(startDate));
-        BackupHandler handler = tcClient.getHandlerForBackupInsert(streamID, new Date(startDate));
+        InsertHandler handler = tcClient.getHandlerForBackupInsert(streamID, new Date(startDate));
         for (long i = 0; i < NUM_ELEMENTS_TO_BACKUP_INSERT; i++) {
             // insert data from the past in-range
-            handler.putDataPoint(new DataPoint(new Date(startDate + i * tsDelta), rand.nextInt(200)));
+            handler.writeDataPointToStream(new DataPoint(new Date(startDate + i * tsDelta), rand.nextInt(200)));
         }
-        handler.flush();
+        handler.terminate();
 
         // For demonstration we perform a live insert a the current timestamp with the chunk handler
         // This api would be used by a sensor or data source that produces data live and on the fly
         System.out.println("Insert data live at the current point in time");
-        tcClient.addDataPointToStream(streamID, new DataPoint(new Date(), 10));
-        // terminate all chunk handlers to flush the data to the server
-        tcClient.terminate();
+        InsertHandler liveHandler = tcClient.getHandlerForLiveInsert(streamID, 5000);
+        liveHandler.writeDataPointToStream(new DataPoint(new Date(), 10));
+        Thread.sleep(1000);
+        liveHandler.flush();
+
 
         // perform simple range aggregation queries
         System.out.println("Perform simple time range aggregations");
@@ -105,6 +107,8 @@ public class BasicTCUsage {
 
         }
 
+        //terminate the live handler
+        liveHandler.terminate();
         // delete the data
         tcClient.deleteStream(streamID);
     }

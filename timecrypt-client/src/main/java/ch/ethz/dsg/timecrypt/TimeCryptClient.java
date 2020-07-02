@@ -17,8 +17,6 @@ import ch.ethz.dsg.timecrypt.client.streamHandling.*;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,15 +49,12 @@ public class TimeCryptClient {
 
     // TODO: These values could be made configurable in something like an advanced stream creation.
     private final static int CHUNK_KEY_STREAM_DEPTH = 20;
-    private final static int MAX_CHUNK_HANDLER_SHUTDOWN_TIME = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(TimeCryptClient.class);
 
     private final TimeCryptKeystore keyStore;
     private final TimeCryptProfile profile;
 
-    private final Map<Long, ChunkHandler> chunkHandlers;
-    private final Map<Long, Pair<Thread, ChunkHandler>> chunkHandlerThreads;
-
+    private final List<InsertHandler> openInsertHandlers = Collections.synchronizedList(new ArrayList<InsertHandler>());
     private final ServerInterface serverInterface;
 
     public ServerInterface getServerInterface() {
@@ -80,8 +75,6 @@ public class TimeCryptClient {
     public TimeCryptClient(TimeCryptKeystore keyStore, TimeCryptProfile profile) {
         this.keyStore = keyStore;
         this.profile = profile;
-        this.chunkHandlers = new HashMap<>();
-        this.chunkHandlerThreads = new HashMap<>();
 
         try {
             this.serverInterface = ServerInterfaceFactory.getServerInterface(profile);
@@ -156,7 +149,7 @@ public class TimeCryptClient {
         Stream stream = null;
         if (startDate == null)
             stream = new Stream(streamId, name, description, chunkSize, resolutionLevels, metaData,
-                localChunkStorePath);
+                    localChunkStorePath);
         else
             stream = new Stream(streamId, name, description, chunkSize, resolutionLevels, metaData,
                     localChunkStorePath, startDate);
@@ -268,71 +261,94 @@ public class TimeCryptClient {
      *                                                time (with a granularity of one millisecond (or less if your JVM
      *                                                does not support such fine grained times)).
      */
-    public void addDataPointToStream(long streamId, DataPoint dataPoint) throws CouldNotStoreException,
-            StreamNotYetStartedException, ChunkAlreadyWrittenException, DataPointOutsideOfWriteWindowException,
-            DuplicateDataPointException {
-
+    public void addDataPointLiveToStream(long streamId, DataPoint dataPoint) throws TCWriteException {
         synchronized (this) {
-            if (chunkHandlers.containsKey(streamId)) {
-                chunkHandlers.get(streamId).putDataPoint(dataPoint);
-            } else {
-                ChunkHandler streamHandler;
-                try {
-                    streamHandler = new ChunkHandler(profile.getStream(streamId),
-                            new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
-                                    streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface,
-                            CHUNK_WRITE_WINDOW.getMillis());
-                } catch (Exception e) {
-                    LOGGER.error("Could not receive the key for the stream.", e);
-                    throw new CouldNotStoreException("Could not receive the key for the stream.");
-                }
-                this.chunkHandlerThreads.put(streamId, new ImmutablePair<>(new Thread(streamHandler), streamHandler));
-                this.chunkHandlerThreads.get(streamId).getLeft().start();
-                this.chunkHandlers.put(streamId, streamHandler);
-
-                streamHandler.putDataPoint(dataPoint);
-            }
+            InsertHandler handler = getHandlerForLiveInsert(streamId);
+            handler.writeDataPointToStream(dataPoint);
         }
     }
 
-    public BackupHandler getHandlerForBackupInsert(long streamId, Date backupStartTime) throws CouldNotReceiveException, InvalidQueryException, IOException {
-        return new BackupHandler(profile.getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
-                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH),  this.serverInterface, backupStartTime);
+    private boolean checkHandlerExists(long streamID) {
+        for (InsertHandler handler : openInsertHandlers) {
+            if (handler.getStreamID() == streamID && handler instanceof TCLiveWriteHandler)
+                return true;
+        }
+        return false;
+    }
+
+    private InsertHandler getHandlerWith(long streamID) {
+        for (InsertHandler handler : openInsertHandlers) {
+            if (handler.getStreamID() == streamID && handler instanceof TCLiveWriteHandler)
+                return handler;
+        }
+        return null;
     }
 
     /**
-     * Stop executions of all known chunk handlers.
-     * Stop producing values and finishes all chunks in all the producer threads and sends them
-     * blocks until this is done.
-     * <p>
-     * This method should always be called before exiting the program that uses the TimeCrypt client.
+     * Creates a insert stream handler for live inserts.
+     * This handler can be used to perform on the fly inserts from e.g. a sensor.
+     * The handler serializes the stream into fixed time windows and takes care of encryption.
+     *
+     * @param streamId the stream id the handler should insert to.
+     * @return a TC insert handler for live inserts.
      */
-    public void terminate() {
-        synchronized (this) {
-            for (long streamId : chunkHandlers.keySet()) {
-                try {
-                    LOGGER.debug("Terminating ChunkHandler for Stream " + streamId);
-                    chunkHandlers.get(streamId).terminate();
-                    LOGGER.debug("Waking up ChunkHandler for Stream " + streamId);
-                    ChunkHandler theObject = chunkHandlerThreads.get(streamId).getRight();
-                    synchronized (theObject) {
-                        theObject.notify();
-                    }
-                } catch (Exception e) {
-                    LOGGER.error("Catched exception while shutting down chunk handler for stream " + streamId +
-                            " ignoring it to ensure clean shutdown", e);
-                }
-                try {
-                    LOGGER.debug("Start waiting for chunk handler for stream ID " + streamId + " to finish.");
-                    chunkHandlerThreads.get(streamId).getLeft().join(MAX_CHUNK_HANDLER_SHUTDOWN_TIME);
-                } catch (InterruptedException e) {
-                    LOGGER.error("Got interrupted while waiting for chunk handler for stream ID " + streamId +
-                            " to finish.", e);
-                }
+    public InsertHandler getHandlerForLiveInsert(long streamId) {
+        return this.getHandlerForLiveInsert(streamId, CHUNK_WRITE_WINDOW.getMillis());
+    }
 
+    /**
+     * Creates a insert stream handler for live inserts.
+     * This handler can be used to perform on the fly inserts from e.g. a sensor.
+     * The handler serializes the stream into fixed time windows and takes care of encryption.
+     *
+     * @param streamId      the stream id the handler should insert to.
+     * @param writeWindowMS data within the write window (milliseconds) is kept local for out of order inserts
+     * @return a TC insert handler for live inserts.
+     */
+    public InsertHandler getHandlerForLiveInsert(long streamId, long writeWindowMS) {
+        if (checkHandlerExists(streamId))
+            return getHandlerWith(streamId);
+        TCLiveWriteHandler streamHandler = null;
+        try {
+            streamHandler = new TCLiveWriteHandler(profile.getStream(streamId),
+                    new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                            streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), serverInterface, writeWindowMS, openInsertHandlers);
+        } catch (CouldNotReceiveException e) {
+            e.printStackTrace();
+        } catch (InvalidQueryException e) {
+            e.printStackTrace();
+        }
+        return streamHandler;
+    }
+
+    /**
+     * Creates a insert stream handler for backup inserts.
+     * This handler can be used to insert data from the past into the stream.
+     *
+     * @param streamId        the stream id the handler should insert to.
+     * @param backupStartTime the start time of the data that is to be inserted.
+     * @return a TC insert handler for backup inserts.
+     */
+    public InsertHandler getHandlerForBackupInsert(long streamId, Date backupStartTime) throws CouldNotReceiveException, InvalidQueryException, IOException {
+        return new BackupHandler(profile.getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), this.serverInterface, backupStartTime, openInsertHandlers);
+    }
+
+    /**
+     * Terminates all open insertHandlers created by this client
+     *
+     * @throws InterruptedException
+     */
+    public void terminateAllHandlers() {
+        for (InsertHandler handler : openInsertHandlers) {
+            try {
+                handler.terminate();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
     }
+
 
     /**
      * Retrieve a chunk from a stream on the server and decrypt it.
