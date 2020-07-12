@@ -59,7 +59,7 @@ The client will automatically create a new key store for the cryptographic mater
 To build the project without Docker you will need the following prerequisites on your system:
 - Maven
 - A JDK >= Java version 11
-- cmake + c compiler  (can be skipped by deactivating the `aes-openssl-native` profile of maven (`-P \!aes-openssl-native`))
+- cmake + c compiler  (can be skipped by deactivating the `aesni-native` profile of maven (`-P!aesni-native``))
 
 The project jar libraries can be build with maven.
 ```
@@ -75,7 +75,7 @@ To install the TimeCrypt libraries in the local maven repository run:
 mvn install
 ```
 
-If your system does not support AES-NI you can disable it during build with the profile switch (`-P \!aesni-native`) e.g.:
+If your system does not support AES-NI you can disable it during build with the profile switch (`-P!aesni-native`) e.g.:
 
 ```
 mvn package -P \!aesni-native
