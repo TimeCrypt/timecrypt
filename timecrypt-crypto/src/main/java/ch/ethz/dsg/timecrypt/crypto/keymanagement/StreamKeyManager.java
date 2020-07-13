@@ -7,50 +7,74 @@ package ch.ethz.dsg.timecrypt.crypto.keymanagement;
 
 
 import ch.ethz.dsg.timecrypt.crypto.keyRegression.IKeyRegression;
+import ch.ethz.dsg.timecrypt.crypto.keyRegression.SeedNode;
 import ch.ethz.dsg.timecrypt.crypto.keyRegression.TreeKeyRegressionFactory;
 
 import java.math.BigInteger;
+import java.security.Key;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Class for handling all the keys associated with a stream as well as receiving them.
  */
 public class StreamKeyManager {
 
-    private final byte[] chunkKeystreamSeedNode;
-    private final byte[] metadataEncryptionKey;
+    private final IKeyRegression treeKeyRegression;
     private final byte[] macKey;
     private final byte[] sharingKeystreamMasterKey;
-    private final int chunkKeystreamDepth;
+    private boolean isMaster;
 
-    public StreamKeyManager(byte[] streamMasterKey, int chunkKeystreamDepth) {
-        this.chunkKeystreamDepth = chunkKeystreamDepth;
+    public StreamKeyManager(byte[] streamMasterKey, int numKeysDepth) {
         IKeyRegression keyDerivationTree = TreeKeyRegressionFactory.getNewDefaultKeyRegression(streamMasterKey, 2);
-
-        chunkKeystreamSeedNode = keyDerivationTree.getSeed(0);
-        metadataEncryptionKey = keyDerivationTree.getSeed(1);
+        byte[] metadataEncryptionKey = keyDerivationTree.getSeed(1);
+        treeKeyRegression = TreeKeyRegressionFactory.getNewDefaultKeyRegression(metadataEncryptionKey, numKeysDepth);
         macKey = keyDerivationTree.getSeed(2);
         sharingKeystreamMasterKey = keyDerivationTree.getSeed(3);
+        isMaster = true;
     }
 
-    public byte[] getMetadataEncryptionKey() {
-        return metadataEncryptionKey;
+    public StreamKeyManager(ArrayList<SeedNode> nodes, byte[] macKey, int numKeysDepth) {
+        this.treeKeyRegression = TreeKeyRegressionFactory.getNewDefaultKeyRegression(nodes, numKeysDepth);
+        this.macKey = macKey;
+        sharingKeystreamMasterKey = null;
+        isMaster = false;
     }
 
     public BigInteger getMacKeyAsBigInteger() {
         return new BigInteger(macKey);
     }
 
-    public byte[] getMacKey() {
-        return macKey;
+    public IKeyRegression getTreeKeyRegression() {
+        return treeKeyRegression;
     }
 
-    public IKeyRegression getChunkKeyRegression() {
-        return TreeKeyRegressionFactory.getNewDefaultKeyRegression(chunkKeystreamSeedNode, chunkKeystreamDepth);
+    public byte[] getChunkEncryptionKey(long chunkId) {
+        return KeyUtil.deriveCombinedKey(treeKeyRegression.getPRF(),
+                treeKeyRegression.getSeed(chunkId),
+                treeKeyRegression.getSeed(chunkId + 1));
+    }
+
+    public byte[] getChunkEncryptionKey(long chunkId, CachedKeys keys) {
+        if (!keys.containsKeys()) {
+            keys.setK1(treeKeyRegression.getSeed(chunkId));
+            keys.setK2(treeKeyRegression.getSeed(chunkId + 1));
+        }
+        return KeyUtil.deriveCombinedKey(treeKeyRegression.getPRF(), keys.k1, keys.k2);
     }
 
     public IKeyRegression getSharingKeyRegression(int precision, int depth) {
-        // TODO: create sharing keyRegression from the precision
-        // prf.apply(key, precision)
-        return TreeKeyRegressionFactory.getNewDefaultKeyRegression(sharingKeystreamMasterKey, depth);
+        if (isMaster) {
+            byte[] precisionMasterSecret = this.treeKeyRegression.getPRF().apply(sharingKeystreamMasterKey, precision);
+            return TreeKeyRegressionFactory.getNewDefaultKeyRegression(precisionMasterSecret, depth);
+        } else {
+            throw new RuntimeException("Non-owner is not able to share");
+        }
     }
+
+    public boolean isMaster() {
+        return this.isMaster;
+    }
+
+
 }

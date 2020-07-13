@@ -17,6 +17,7 @@ import ch.ethz.dsg.timecrypt.client.streamHandling.Stream;
 import ch.ethz.dsg.timecrypt.client.streamHandling.TimeUtil;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -308,9 +309,10 @@ public class benchmark {
         curChunk.finalizeChunk();
         List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
 
+        CachedKeys cachedKeys = new CachedKeys();
         for (StreamMetaData metadata : associatedStream.getMetaData()) {
             encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
-                    curChunk.getValues(), streamKeyManager, chunkId));
+                    curChunk.getValues(), streamKeyManager, chunkId, cachedKeys));
         }
         EncryptedDigest digest = new EncryptedDigest(associatedStream.getId(), chunkId, chunkId,
                 encryptedMetaData);

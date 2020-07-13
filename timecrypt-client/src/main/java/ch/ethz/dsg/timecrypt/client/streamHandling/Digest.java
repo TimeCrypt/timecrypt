@@ -10,6 +10,7 @@ import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
 import ch.ethz.dsg.timecrypt.crypto.encryption.MACCheckFailed;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -55,11 +56,11 @@ public class Digest implements Comparable<Digest> {
             // TODO Throw better exception
             throw new RuntimeException("ChunkIdTo has to be greater than chunkIdFrom for a digest.");
         }
-
+        CachedKeys cachedKeys = new CachedKeys();
         for (EncryptedMetadata curMetadataItem : encryptedMetadata) {
             values.add(new ImmutablePair<>(correspondingStream.getMetaDataAt(curMetadataItem.getMetadataId()),
                     MetaDataFactory.getValueFromEncryptedMetadata(curMetadataItem, streamKeyManager,
-                            chunkIdFrom, chunkIdTo)));
+                            chunkIdFrom, chunkIdTo, cachedKeys)));
         }
     }
 
@@ -80,6 +81,7 @@ public class Digest implements Comparable<Digest> {
             throw new RuntimeException("ChunkIdTo has to be greater than chunkIdFrom for a digest.");
         }
 
+        CachedKeys cachedKeys = new CachedKeys();
         for (EncryptedMetadata curMetadataItem : encryptedMetadata) {
             StreamMetaData correspondingMetaData = null;
 
@@ -92,7 +94,7 @@ public class Digest implements Comparable<Digest> {
 
             values.add(new ImmutablePair<>(correspondingMetaData,
                     MetaDataFactory.getValueFromEncryptedMetadata(curMetadataItem, streamKeyManager,
-                            chunkIdFrom, chunkIdTo)));
+                            chunkIdFrom, chunkIdTo, cachedKeys)));
         }
     }
 

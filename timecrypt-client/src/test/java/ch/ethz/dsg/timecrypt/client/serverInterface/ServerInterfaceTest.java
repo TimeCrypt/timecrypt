@@ -13,6 +13,7 @@ import ch.ethz.dsg.timecrypt.client.state.TimeCryptProfile;
 import ch.ethz.dsg.timecrypt.client.streamHandling.*;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.apache.commons.lang3.tuple.Pair;
 import org.hamcrest.collection.IsIterableContainingInAnyOrder;
@@ -637,9 +638,10 @@ public class ServerInterfaceTest {
 
         List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
 
+        CachedKeys cachedKeys = new CachedKeys();
         for (StreamMetaData metadata : metaData) {
             encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata, values, streamKeyManager,
-                    chunkId));
+                    chunkId, cachedKeys));
         }
         return new EncryptedDigest(streamId, chunkId, chunkId + 1, encryptedMetaData);
     }

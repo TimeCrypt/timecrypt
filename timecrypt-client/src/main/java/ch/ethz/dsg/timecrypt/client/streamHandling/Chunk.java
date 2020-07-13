@@ -10,6 +10,7 @@ import ch.ethz.dsg.timecrypt.client.exceptions.DuplicateDataPointException;
 import ch.ethz.dsg.timecrypt.client.exceptions.QueryFailedException;
 import ch.ethz.dsg.timecrypt.client.exceptions.WrongChunkException;
 import ch.ethz.dsg.timecrypt.crypto.encryption.TimeCryptChunkEncryption;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
@@ -56,8 +57,8 @@ public class Chunk {
 
         byte[] valueBytes;
         try {
-            valueBytes = TimeCryptChunkEncryption.decryptAESGcm(streamKeyManager.getChunkKeyRegression()
-                    .getSeed(chunkID), encryptedData);
+            valueBytes = TimeCryptChunkEncryption.decryptAESGcm(streamKeyManager.getChunkEncryptionKey(chunkID),
+                    encryptedData);
         } catch (InvalidKeyException | BadPaddingException | NoSuchPaddingException | NoSuchAlgorithmException |
                 InvalidAlgorithmParameterException | IllegalBlockSizeException e) {
             LOGGER.error("Could not decrypt chunk.", e);
@@ -133,7 +134,15 @@ public class Chunk {
     public byte[] encrypt(StreamKeyManager streamKeyManager) throws Exception {
         LOGGER.debug("starting to encrypt chunk " + this.chunkID);
         byte[] valueBytes = SerializationUtils.serialize(values);
-        byte[] bytes = TimeCryptChunkEncryption.encryptAESGcm(streamKeyManager.getChunkKeyRegression().getSeed(chunkID), valueBytes);
+        byte[] bytes = TimeCryptChunkEncryption.encryptAESGcm(streamKeyManager.getChunkEncryptionKey(chunkID), valueBytes);
+        LOGGER.debug("starting to encrypt finished encrypting chunk " + this.chunkID);
+        return bytes;
+    }
+
+    public byte[] encrypt(StreamKeyManager streamKeyManager, CachedKeys cachedKeys) throws Exception {
+        LOGGER.debug("starting to encrypt chunk " + this.chunkID);
+        byte[] valueBytes = SerializationUtils.serialize(values);
+        byte[] bytes = TimeCryptChunkEncryption.encryptAESGcm(streamKeyManager.getChunkEncryptionKey(chunkID, cachedKeys), valueBytes);
         LOGGER.debug("starting to encrypt finished encrypting chunk " + this.chunkID);
         return bytes;
     }

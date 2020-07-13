@@ -107,13 +107,23 @@ public class KeyUtil {
         return bytesToLong(out);
     }
 
-    public BigInteger generateMACKey(int numBits, BigInteger fieldPrime, SecureRandom random) {
+    public static BigInteger generateMACKey(int numBits, BigInteger fieldPrime, SecureRandom random) {
         return new BigInteger(numBits, random).mod(fieldPrime);
     }
 
-    public byte[] generateKey(int numBytes, SecureRandom random) {
+    public static byte[] generateKey(int numBytes, SecureRandom random) {
         byte[] key = new byte[numBytes];
         random.nextBytes(key);
         return key;
+    }
+
+    public static byte[] deriveCombinedKey(IPRF prf, byte[] key1, byte[] key2) {
+        if (key1.length != key2.length)
+            throw new  RuntimeException("Cannot create a combined key from keys with different length");
+        byte[] inputKey = new byte[key1.length];
+        for (int iter = 0; iter < key1.length; iter++) {
+            inputKey[iter] = (byte) (key1[iter] ^ key2[iter]);
+        }
+        return prf.apply(inputKey, createInputForEncKeyDerivation(0));
     }
 }

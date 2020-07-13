@@ -9,6 +9,7 @@ import ch.ethz.dsg.timecrypt.crypto.encryption.HEAC.HEACEncryptionBI;
 import ch.ethz.dsg.timecrypt.crypto.encryption.hoMAC.HoMAC;
 import ch.ethz.dsg.timecrypt.crypto.encryption.hoMAC.IHoMAC;
 import ch.ethz.dsg.timecrypt.crypto.keyRegression.IKeyRegression;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.KeyUtil;
 
 import java.math.BigInteger;
@@ -60,6 +61,14 @@ public class TimeCryptEncryptionBIPlus {
         return encrypt(msg, seedForID1, seedForID2, metadataID);
     }
 
+    public TCAuthBICiphertext encryptMetadata(BigInteger msg, long timeID, long metadataID, CachedKeys cachedKeys) {
+        if (!cachedKeys.containsKeys()) {
+            cachedKeys.setK1(reg.getSeed(timeID));
+            cachedKeys.setK2(reg.getSeed(timeID + 1));
+        }
+        return encrypt(msg, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
+    }
+
     public TCAuthBICiphertext[] batchEncryptMetadata(BigInteger[] msgs, long timeID, long[] metadataIDs) {
         byte[] seedForID1 = reg.getSeed(timeID);
         byte[] seedForID2 = reg.getSeed(timeID + 1);
@@ -100,6 +109,15 @@ public class TimeCryptEncryptionBIPlus {
         byte[] seedForID2 = reg.getSeed(timeIDTo + 1);
         checkMAC(msg.ciphertext, msg.authCode, seedForID1, seedForID2, metadataID);
         return decryptLong(msg, seedForID1, seedForID2, metadataID);
+    }
+
+    public long decryptMetadataLong(TCAuthBICiphertext msg, long timeIDFrom, long timeIDTo, long metadataID, CachedKeys cachedKeys) throws MACCheckFailed {
+        if (!cachedKeys.containsKeys()) {
+            cachedKeys.setK1(reg.getSeed(timeIDFrom));
+            cachedKeys.setK2(reg.getSeed(timeIDTo + 1));
+        }
+        checkMAC(msg.ciphertext, msg.authCode, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
+        return decryptLong(msg, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
     }
 
     public long[] batchDecryptMetadataLong(TCAuthBICiphertext[] msgs, long timeIDFrom, long timeIDTo, long[] metadataIDs) throws MACCheckFailed {

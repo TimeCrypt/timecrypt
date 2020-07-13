@@ -77,13 +77,15 @@ public class BackupHandler implements InsertHandler {
         long chunkId = curChunk.getChunkID();
         LOGGER.debug("Finalizing chunk " + chunkId);
         curChunk.finalizeChunk();
-        EncryptedDigest digest = Encryption.encryptMetadata(associatedStream.getMetaData(), streamKeyManager,
-                curChunk.getValues(), associatedStream.getId(), chunkId);
-
-        EncryptedChunk encryptedChunk;
+        LOGGER.debug("Encrypting metadata for chunk " + chunkId);
+        EncryptedDigest digest = null;
+        EncryptedChunk encryptedChunk = null;
         try {
             LOGGER.debug("Encrypting chunk " + chunkId);
-            encryptedChunk = Encryption.encryptChunk(curChunk, streamKeyManager, associatedStream.getId(), chunkId);
+            Encryption.CiphertextPair pair = Encryption.encryptMetadataAndChunk(associatedStream.getMetaData(),
+                    curChunk, streamKeyManager, associatedStream.getId(), chunkId);
+            digest = pair.metadata;
+            encryptedChunk = pair.chunk;
         } catch (Exception e) {
             LOGGER.error("Could not encrypt chunk.", e);
             // TODO: raise a useful exception.

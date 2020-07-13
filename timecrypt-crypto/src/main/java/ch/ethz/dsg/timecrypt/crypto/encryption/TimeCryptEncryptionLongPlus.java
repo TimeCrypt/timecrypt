@@ -9,6 +9,7 @@ import ch.ethz.dsg.timecrypt.crypto.encryption.HEAC.HEACEncryptionLong;
 import ch.ethz.dsg.timecrypt.crypto.encryption.hoMAC.HoMAC;
 import ch.ethz.dsg.timecrypt.crypto.encryption.hoMAC.IHoMAC;
 import ch.ethz.dsg.timecrypt.crypto.keyRegression.IKeyRegression;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.KeyUtil;
 
 import java.math.BigInteger;
@@ -54,10 +55,26 @@ public class TimeCryptEncryptionLongPlus {
         return encrypt(msg, seedForID1, seedForID2, metadataID);
     }
 
+    public TCAuthLongCiphertext encryptMetadata(long msg, long timeID, long metadataID, CachedKeys cachedKeys) {
+        if (!cachedKeys.containsKeys()) {
+            cachedKeys.setK1(reg.getSeed(timeID));
+            cachedKeys.setK2(reg.getSeed(timeID + 1));
+        }
+        return encrypt(msg, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
+    }
+
     public long decryptMetadata(TCAuthLongCiphertext msg, long timeIDFrom, long timeIDTo, long metadataID) throws MACCheckFailed {
         byte[] seedForID1 = reg.getSeed(timeIDFrom);
         byte[] seedForID2 = reg.getSeed(timeIDTo + 1);
         return decrypt(msg, seedForID1, seedForID2, metadataID);
+    }
+
+    public long decryptMetadata(TCAuthLongCiphertext msg, long timeIDFrom, long timeIDTo, long metadataID, CachedKeys cachedKeys) throws MACCheckFailed {
+        if (!cachedKeys.containsKeys()) {
+            cachedKeys.setK1(reg.getSeed(timeIDFrom));
+            cachedKeys.setK2(reg.getSeed(timeIDTo + 1));
+        }
+        return decrypt(msg, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
     }
 
     public TCAuthLongCiphertext[] batchEncryptMetadata(long[] msgs, long timeID, long[] metadataIDs) {

@@ -15,6 +15,7 @@ import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedDigest;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.MetaDataFactory;
 import ch.ethz.dsg.timecrypt.client.streamHandling.metaData.StreamMetaData;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 
 import java.util.ArrayList;
@@ -27,9 +28,10 @@ public class Encryption {
                                                   Collection<DataPoint> dataPoints, long streamId, long chunkId) {
         List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
 
+        CachedKeys keys = new CachedKeys();
         for (StreamMetaData metadata : metaDataItems) {
             encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
-                    dataPoints, streamKeyManager, chunkId));
+                    dataPoints, streamKeyManager, chunkId, keys));
         }
         return new EncryptedDigest(streamId, chunkId, chunkId + 1,
                 encryptedMetaData);
@@ -40,4 +42,27 @@ public class Encryption {
 
         return new EncryptedChunk(streamId, chunkId, chunk.encrypt(streamKeyManager));
     }
+
+    public static CiphertextPair encryptMetadataAndChunk(List<StreamMetaData> metaDataItems, Chunk chunk, StreamKeyManager streamKeyManager,
+                                                  long streamId, long chunkId) throws Exception {
+        List<EncryptedMetadata> encryptedMetaData = new ArrayList<>();
+        CiphertextPair pair = new CiphertextPair();
+
+        CachedKeys keys = new CachedKeys();
+        for (StreamMetaData metadata : metaDataItems) {
+            encryptedMetaData.add(MetaDataFactory.getEncryptedMetadataForValue(metadata,
+                    chunk.getValues(), streamKeyManager, chunkId, keys));
+        }
+        pair.metadata = new EncryptedDigest(streamId, chunkId, chunkId + 1,
+                encryptedMetaData);
+
+        pair.chunk = new EncryptedChunk(streamId, chunkId, chunk.encrypt(streamKeyManager, keys));
+        return pair;
+    }
+
+    public static class CiphertextPair {
+        public EncryptedDigest metadata;
+        public EncryptedChunk chunk;
+    }
 }
+

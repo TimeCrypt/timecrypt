@@ -15,6 +15,10 @@ public class TreeKeyRegressionFactory {
         return getNewKeyRegression(PRFFactory.getDefaultPRF(), rootSeed, depth, 2);
     }
 
+    public static IKeyRegression getNewDefaultKeyRegression(ArrayList<SeedNode> nodes, int depth) {
+        return new TreeKeyRegression(false, PRFFactory.getDefaultPRF(), nodes, depth, 2);
+    }
+
     public static IKeyRegression getNewKeyRegression(IPRF prf, byte[] rootSeed, int depth, int kFactor) {
         ArrayList<SeedNode> seeds = new ArrayList<SeedNode>();
         seeds.add(new TreeKeyRegressionNode(rootSeed, 0, 0));

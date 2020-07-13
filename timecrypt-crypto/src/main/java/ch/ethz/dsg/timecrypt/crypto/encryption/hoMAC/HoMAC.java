@@ -22,13 +22,12 @@ public class HoMAC implements IHoMAC {
     public HoMAC(IKeyRegression keyRegression, BigInteger macKey, BigInteger prime) {
         this.keyRegression = keyRegression;
         this.prime = prime;
-        this.macKey = macKey;
-        this.macKeyInv = macKey.modInverse(prime);
+        this.macKey = macKey.mod(prime);
+        this.macKeyInv = this.macKey.modInverse(prime);
     }
 
     public HoMAC(IKeyRegression keyRegression, SecureRandom rand, BigInteger prime) {
-        this(keyRegression, BigInteger.ZERO, prime);
-        this.macKey = new BigInteger(prime.bitLength(), rand).mod(prime);
+        this(keyRegression, new BigInteger(prime.bitLength(), rand), prime);
     }
 
     public HoMAC(IKeyRegression keyRegression, BigInteger macKey) {

@@ -9,6 +9,7 @@ package ch.ethz.dsg.timecrypt.client.streamHandling.metaData;
 import ch.ethz.dsg.timecrypt.client.serverInterface.EncryptedMetadata;
 import ch.ethz.dsg.timecrypt.client.streamHandling.DataPoint;
 import ch.ethz.dsg.timecrypt.crypto.encryption.*;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.StreamKeyManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,29 +37,29 @@ public class MetaDataFactory {
     }
 
     public static long getValueFromEncryptedMetadata(EncryptedMetadata encryptedMetadata, StreamKeyManager
-            streamKeyManager, long chunkIdFrom, long chunkIdTo) throws MACCheckFailed {
+            streamKeyManager, long chunkIdFrom, long chunkIdTo, CachedKeys cachedKeys) throws MACCheckFailed {
 
         switch (encryptedMetadata.getEncryptionScheme()) {
             case LONG:
-                return new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).
+                return new TimeCryptEncryptionLong(streamKeyManager.getTreeKeyRegression()).
                         decryptMetadata(encryptedMetadata.getPayloadAsLong(), chunkIdFrom, chunkIdTo - 1,
-                                encryptedMetadata.getMetadataId());
+                                encryptedMetadata.getMetadataId(), cachedKeys);
             case LONG_MAC:
-                return new TimeCryptEncryptionLongPlus(streamKeyManager.getChunkKeyRegression(),
+                return new TimeCryptEncryptionLongPlus(streamKeyManager.getTreeKeyRegression(),
                         streamKeyManager.getMacKeyAsBigInteger())
                         .decryptMetadata(new TimeCryptEncryptionLongPlus.TCAuthLongCiphertext(
                                         encryptedMetadata.getPayloadAsLong(), encryptedMetadata.getMacAsBigInteger())
-                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId(), cachedKeys);
             case BIG_INT_128:
-                return new TimeCryptEncryptionBI(streamKeyManager.getChunkKeyRegression(), 128).
+                return new TimeCryptEncryptionBI(streamKeyManager.getTreeKeyRegression(), 128).
                         decryptMetadataLong(encryptedMetadata.getPayloadAsBigInteger()
-                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId(), cachedKeys);
             case BIG_INT_128_MAC:
                 return new TimeCryptEncryptionBIPlus(
-                        streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
+                        streamKeyManager.getTreeKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
                         decryptMetadataLong(new TimeCryptEncryptionBIPlus.TCAuthBICiphertext(
                                         encryptedMetadata.getPayloadAsBigInteger(), encryptedMetadata.getMacAsBigInteger())
-                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId());
+                                , chunkIdFrom, chunkIdTo - 1, encryptedMetadata.getMetadataId(), cachedKeys);
             default:
                 throw new RuntimeException("Can not encrypt metadata for unknown metadata encryption scheme " +
                         encryptedMetadata);
@@ -108,34 +109,35 @@ public class MetaDataFactory {
 
 
     public static EncryptedMetadata getEncryptedMetadataForValue(StreamMetaData metadata, Collection<DataPoint> value,
-                                                                 StreamKeyManager streamKeyManager, long chunkId) {
+                                                                 StreamKeyManager streamKeyManager, long chunkId,
+                                                                 CachedKeys cachedkeys) {
         EncryptedMetadata encryptedMetadata;
         LOGGER.debug("starting to encrypt metadata " + metadata.getId() + " in " + chunkId);
         switch (metadata.getEncryptionScheme()) {
             case LONG:
-                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionLong(streamKeyManager.getChunkKeyRegression()).
-                        encryptMetadata(metadata.calculate(value), chunkId, metadata.getId()), metadata.getId(),
+                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionLong(streamKeyManager.getTreeKeyRegression()).
+                        encryptMetadata(metadata.calculate(value), chunkId, metadata.getId(), cachedkeys), metadata.getId(),
                         metadata.getEncryptionScheme());
                 LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
                 return encryptedMetadata;
             case LONG_MAC:
                 TimeCryptEncryptionLongPlus.TCAuthLongCiphertext ciphertext = new TimeCryptEncryptionLongPlus(
-                        streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger())
-                        .encryptMetadata(metadata.calculate(value), chunkId, metadata.getId());
+                        streamKeyManager.getTreeKeyRegression(), streamKeyManager.getMacKeyAsBigInteger())
+                        .encryptMetadata(metadata.calculate(value), chunkId, metadata.getId(), cachedkeys);
                 encryptedMetadata = new EncryptedMetadata(ciphertext.ciphertext, ciphertext.authCode, metadata.getId(),
                         metadata.getEncryptionScheme());
                 LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
                 return encryptedMetadata;
             case BIG_INT_128:
-                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionBI(streamKeyManager.getChunkKeyRegression(),
+                encryptedMetadata = new EncryptedMetadata(new TimeCryptEncryptionBI(streamKeyManager.getTreeKeyRegression(),
                         128).encryptMetadata(BigInteger.valueOf(metadata.calculate(value)), chunkId,
-                        metadata.getId()), metadata.getId(), metadata.getEncryptionScheme());
+                        metadata.getId(), cachedkeys), metadata.getId(), metadata.getEncryptionScheme());
                 LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);
                 return encryptedMetadata;
             case BIG_INT_128_MAC:
                 TimeCryptEncryptionBIPlus.TCAuthBICiphertext ciphertextBi = new TimeCryptEncryptionBIPlus(
-                        streamKeyManager.getChunkKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
-                        encryptMetadata(BigInteger.valueOf(metadata.calculate(value)), chunkId, metadata.getId());
+                        streamKeyManager.getTreeKeyRegression(), streamKeyManager.getMacKeyAsBigInteger(), 128).
+                        encryptMetadata(BigInteger.valueOf(metadata.calculate(value)), chunkId, metadata.getId(), cachedkeys);
                 encryptedMetadata = new EncryptedMetadata(ciphertextBi.ciphertext, ciphertextBi.authCode, metadata.getId(),
                         metadata.getEncryptionScheme());
                 LOGGER.debug("finished to encrypt metadata " + metadata.getId() + " in " + chunkId);

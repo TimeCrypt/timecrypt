@@ -7,6 +7,7 @@ package ch.ethz.dsg.timecrypt.crypto.encryption;
 
 import ch.ethz.dsg.timecrypt.crypto.encryption.HEAC.HEACEncryptionBI;
 import ch.ethz.dsg.timecrypt.crypto.keyRegression.IKeyRegression;
+import ch.ethz.dsg.timecrypt.crypto.keymanagement.CachedKeys;
 import ch.ethz.dsg.timecrypt.crypto.keymanagement.KeyUtil;
 
 import java.math.BigInteger;
@@ -48,6 +49,14 @@ public class TimeCryptEncryptionBI {
         return encrypt(msg, seedForID1, seedForID2, metadataID);
     }
 
+    public BigInteger encryptMetadata(BigInteger msg, long timeID, long metadataID, CachedKeys keys) {
+        if (!keys.containsKeys()) {
+            keys.setK1(reg.getSeed(timeID));
+            keys.setK2(reg.getSeed(timeID + 1));
+        }
+        return encrypt(msg, keys.getK1(), keys.getK2(), metadataID);
+    }
+
     public BigInteger decryptMetadata(BigInteger msg, long timeIDFrom, long timeIDTo, long metadataID) {
         byte[] seedForID1 = reg.getSeed(timeIDFrom);
         byte[] seedForID2 = reg.getSeed(timeIDTo + 1);
@@ -78,6 +87,14 @@ public class TimeCryptEncryptionBI {
         byte[] seedForID1 = reg.getSeed(timeIDFrom);
         byte[] seedForID2 = reg.getSeed(timeIDTo + 1);
         return decryptLong(msg, seedForID1, seedForID2, metadataID);
+    }
+
+    public long decryptMetadataLong(BigInteger msg, long timeIDFrom, long timeIDTo, long metadataID, CachedKeys cachedKeys) {
+        if (!cachedKeys.containsKeys()) {
+            cachedKeys.setK1(reg.getSeed(timeIDFrom));
+            cachedKeys.setK2(reg.getSeed(timeIDTo + 1));
+        }
+        return decryptLong(msg, cachedKeys.getK1(), cachedKeys.getK2(), metadataID);
     }
 
     public long[] batchDecryptMetadataLong(BigInteger[] msgs, long timeIDFrom, long timeIDTo, long[] metadataIDs) {
