@@ -39,7 +39,7 @@ case "$ACTION" in
     wait-for-it -t $TIMECRYPT_TIMEOUT $TIMECRYPT_HOST:$TIMECRYPT_PORT
     echo "Server up"
 
-    java -jar $EXAMPLE1_JAR_NAME --verbose "${@:2}"
+    java -jar $EXAMPLE1_JAR_NAME
     ;;
   client)
     echo "Starting client - waiting for server"
