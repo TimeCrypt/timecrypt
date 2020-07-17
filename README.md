@@ -67,8 +67,9 @@ mvn package
 ```
 it will resolve all dependencies and build the project. Afterwards the project ccontains the following java libraries
  - **Server:** `timecrypt-server/target/timecrypt-server-jar-with-dependencies.jar`
- - **Client:** `timecrypt-client/target/timecrypt-testbed-jar-with-dependencies.jar`
- - **Producer / Testbed:** `timecrypt-client/target/timecrypt-client-jar-with-dependencies.jar`
+ - **Client:** `timecrypt-client/target/timecrypt-client-jar-with-dependencies.jar`
+ - **Producer / Testbed:** `timecrypt-client/target/timecrypt-testbed-jar-with-dependencies.jar`
+ - **Bench Client:** `timecrypt-client/target/timecrypt-bench-client-jar-with-dependencies.jar`
 
 To install the TimeCrypt libraries in the local maven repository run:
 ```
@@ -100,6 +101,12 @@ Inspect the scripts to configure the server parameters accordingly.
 timecrypt-client/scripts/run_cli_client.sh
 ```
 Runs the cli client.
+
+### CLI Client
+```
+timecrypt-client/scripts/run_bench_client.sh
+```
+Runs the benchmark client.
 
 
 ### Java Driver 
