@@ -102,11 +102,11 @@ timecrypt-client/scripts/run_cli_client.sh
 ```
 Runs the cli client.
 
-### CLI Client
+### Benchmark Client
 ```
 timecrypt-client/scripts/run_bench_client.sh
 ```
-Runs the benchmark client.
+Runs the benchmark client, type `-h` for displaying arguments.
 
 
 ### Java Driver 
