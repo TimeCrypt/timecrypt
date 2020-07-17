@@ -23,6 +23,7 @@ RUN apt-get update \
 
 ENV CLIENT_JAR_NAME "/timecrypt-client-jar-with-dependencies.jar"
 ENV TESTBED_JAR_NAME "/timecrypt-testbed-jar-with-dependencies.jar"
+ENV BENCH_JAR_NAME "/timecrypt-bench-client-jar-with-dependencies.jar"
 ENV SERVER_JAR_NAME "/timecrypt-server-jar-with-dependencies.jar"
 ENV EXAMPLE1_JAR_NAME "/timecrypt-example-usage-jar-with-dependencies.jar"
 
@@ -31,7 +32,9 @@ RUN chmod u+x /docker-start.sh && dos2unix /docker-start.sh && apt-get --purge r
 
 COPY --from=build /build/timecrypt-client/target/$TESTBED_JAR_NAME $TESTBED_JAR_NAME
 COPY --from=build /build/timecrypt-client/target/$CLIENT_JAR_NAME $CLIENT_JAR_NAME
+COPY --from=build /build/timecrypt-client/target/$BENCH_JAR_NAME $BENCH_JAR_NAME
 COPY --from=build /build/timecrypt-server/target/$SERVER_JAR_NAME $SERVER_JAR_NAME
 COPY --from=build /build/timecrypt-examples/target/$EXAMPLE1_JAR_NAME $EXAMPLE1_JAR_NAME
+
 
 ENTRYPOINT ["/docker-start.sh"]

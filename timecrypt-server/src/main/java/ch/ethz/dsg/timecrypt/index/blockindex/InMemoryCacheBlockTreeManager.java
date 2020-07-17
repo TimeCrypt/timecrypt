@@ -12,14 +12,16 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.google.protobuf.InvalidProtocolBufferException;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Implements the tree in memory - no cassandra needed
  */
 public class InMemoryCacheBlockTreeManager implements IBlockTreeFetcher {
 
-    HashMap<String, BlockTree> treeMap = new HashMap<>();
+    Map<String, BlockTree> treeMap = Collections.synchronizedMap(new HashMap<>());
 
     Cache<String, BlockNode> blockMap = null;
 

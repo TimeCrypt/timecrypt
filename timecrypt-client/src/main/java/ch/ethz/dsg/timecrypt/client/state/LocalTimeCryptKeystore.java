@@ -19,6 +19,9 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Implementation of a TimeCryptKeystore that uses a local file to store data.
@@ -33,6 +36,7 @@ public class LocalTimeCryptKeystore implements TimeCryptKeystore {
     private final String path;
     private final char[] pwdArray;
     private final boolean dirty;
+    private final Map<String, SecretKey> keyCache = Collections.synchronizedMap(new HashMap<>());
 
     /**
      * Creates a new local TimeCrypt Keystore that is associated with a file and a password.
@@ -115,6 +119,7 @@ public class LocalTimeCryptKeystore implements TimeCryptKeystore {
 
     @Override
     public void storeStreamKey(String keyID, SecretKey streamMasterKey) throws CouldNotStoreException {
+        keyCache.remove(keyID);
         // Don't put a password to the key because the keystore is already encrypted.
         try {
             keyStore.setEntry(keyID, new KeyStore.SecretKeyEntry(streamMasterKey),
@@ -129,8 +134,12 @@ public class LocalTimeCryptKeystore implements TimeCryptKeystore {
     @Override
     public SecretKey receiveStreamKey(String keyId) throws CouldNotReceiveException, InvalidQueryException {
         // Don't put a password to the key because the keystore is already encrypted.
+        if (keyCache.containsKey(keyId))
+            return keyCache.get(keyId);
         try {
-            return (SecretKey) keyStore.getKey(keyId, "".toCharArray());
+            SecretKey out = (SecretKey) keyStore.getKey(keyId, "".toCharArray());
+            keyCache.put(keyId, out);
+            return out;
         } catch (KeyStoreException | NoSuchAlgorithmException e) {
             LOGGER.error("Error occurred during the recival a key", e);
             throw new CouldNotReceiveException("Error occurred during reciving the key with id " + keyId

@@ -48,6 +48,13 @@ case "$ACTION" in
 
     java -jar $CLIENT_JAR_NAME "${@:2}"
     ;;
+  benchclient)
+    echo "Starting client - waiting for server"
+    wait-for-it -t $TIMECRYPT_TIMEOUT $TIMECRYPT_HOST:$TIMECRYPT_PORT
+    echo "Server up"
+
+    java -jar $BENCH_JAR_NAME "${@:2}"
+    ;;
   *)
     echo "Action '$ACTION' undefined."
     echo ""

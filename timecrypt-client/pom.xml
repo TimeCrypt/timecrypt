@@ -104,6 +104,24 @@
                             </archive>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>build-bench-client</id>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <finalName>timecrypt-bench-client</finalName>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <archive>
+                                <manifest>
+                                    <mainClass>ch.ethz.dsg.timecrypt.BenchClients</mainClass>
+                                </manifest>
+                            </archive>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>

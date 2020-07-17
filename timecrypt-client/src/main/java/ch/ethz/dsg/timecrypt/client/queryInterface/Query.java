@@ -386,8 +386,7 @@ public class Query {
             );
         }
 
-        // we have to allow last chunk ID + 1 because the interval is EXCLUSIVE the last item
-        if (chunkId > stream.getLastWrittenChunkId() + 1) {
+        if (chunkId - 1 > stream.getLastWrittenChunkId()) {
             throw new InvalidQueryIntervalException("Interval ends after the last inserted chunk.", false,
                     new Date(TimeUtil.getChunkStartTime(stream, stream.getLastWrittenChunkId())),
                     new Date(TimeUtil.getChunkStartTime(stream, stream.getLastWrittenChunkId())));

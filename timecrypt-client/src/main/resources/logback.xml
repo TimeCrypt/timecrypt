@@ -34,8 +34,21 @@
         </encoder>
     </appender>
 
+    <appender name="BENCH-FILE" class="ch.qos.logback.core.FileAppender">
+        <file>benchlog.csv</file>
+        <append>true</append>
+        <immediateFlush>false</immediateFlush>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS},%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="ch.ethz.dsg.timecrypt.BenchClients">
+        <appender-ref ref="BENCH-FILE" />
+        <appender-ref ref="STDOUT" />
+    </logger>
+
     <root level="debug">
-        <appender-ref ref="FILE"/>
         <appender-ref ref="STDERR"/>
     </root>
 </configuration>

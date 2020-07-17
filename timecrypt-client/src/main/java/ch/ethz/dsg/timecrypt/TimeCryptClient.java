@@ -56,7 +56,6 @@ public class TimeCryptClient {
 
     private final List<InsertHandler> openInsertHandlers = Collections.synchronizedList(new ArrayList<InsertHandler>());
     private final ServerInterface serverInterface;
-
     public ServerInterface getServerInterface() {
         return serverInterface;
     }
@@ -331,6 +330,17 @@ public class TimeCryptClient {
      */
     public InsertHandler getHandlerForBackupInsert(long streamId, Date backupStartTime) throws CouldNotReceiveException, InvalidQueryException, IOException {
         return new BackupHandler(profile.getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
+                streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), this.serverInterface, backupStartTime, openInsertHandlers);
+    }
+
+    /**
+     * Creates a insert stream handler for bench inserts.
+     * @param streamId        the stream id the handler should insert to.
+     * @param backupStartTime the start time of the data that is to be inserted.
+     * @return a TC insert handler for backup inserts.
+     */
+    public InsertHandler getHandlerForInsertBench(long streamId, Date backupStartTime) throws CouldNotReceiveException, InvalidQueryException, IOException {
+        return new BenchInsertHandler(profile.getStream(streamId), new StreamKeyManager(keyStore.receiveStreamKey(profile.getProfileName() +
                 streamId).getEncoded(), CHUNK_KEY_STREAM_DEPTH), this.serverInterface, backupStartTime, openInsertHandlers);
     }
 

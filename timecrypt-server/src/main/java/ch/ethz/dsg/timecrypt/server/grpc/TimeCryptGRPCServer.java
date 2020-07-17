@@ -112,7 +112,7 @@ public class TimeCryptGRPCServer extends TimecryptGrpc.TimecryptImplBase {
         // Check tree existence
         try {
             //TODO: This should really not be int ...
-            treeManager.getTreeForUser(streamId, owner, 1);
+            treeManager.getTreeForUser(streamId, owner, 0);
         } catch (TimeCryptTreeException e) {
             String msg = "Could not get stream tree with id " + streamId + " for owner: " + owner;
             LOGGER.error(msg);

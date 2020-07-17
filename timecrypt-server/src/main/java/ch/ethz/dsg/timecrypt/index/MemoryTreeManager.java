@@ -8,16 +8,14 @@ package ch.ethz.dsg.timecrypt.index;
 import ch.ethz.dsg.timecrypt.index.blockindex.IBlockTreeFetcher;
 import ch.ethz.dsg.timecrypt.exceptions.TimeCryptTreeException;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 public class MemoryTreeManager implements ITreeManager {
 
     private IBlockTreeFetcher treeFetcher;
     private int k = 64;
-    private HashMap<String, Set<Long>> userToStreams = new HashMap<String, Set<Long>>();
-    private HashMap<String, UserStreamTree> userAndUidToTree = new HashMap<String, UserStreamTree>();
+    private Map<String, Set<Long>> userToStreams = Collections.synchronizedMap(new HashMap<String, Set<Long>>());
+    private Map<String, UserStreamTree> userAndUidToTree = Collections.synchronizedMap(new HashMap<String, UserStreamTree>());
 
     public MemoryTreeManager(IBlockTreeFetcher fetcher, int k) {
         this.treeFetcher = fetcher;

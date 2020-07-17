@@ -43,12 +43,6 @@ public class GrpcServerClient implements ServerInterface {
     private TimecryptGrpc.TimecryptBlockingStub stub;
 
 
-    // Create a communication channel to the server, known as a Channel. Channels are thread-safe
-    // and reusable. It is common to create channels at the beginning of your application and reuse
-    // them until the application shuts down.
-    // See: https://github.com/grpc/grpc-java/blob/master/examples/src/main/java/io/grpc/examples/helloworld/HelloWorldClient.java
-
-
     public GrpcServerClient(String serverAddress, int serverPort) {
 
         // create a custom header
@@ -58,7 +52,6 @@ public class GrpcServerClient implements ServerInterface {
         // create client stub
         ManagedChannel channel = ManagedChannelBuilder.forAddress(serverAddress, serverPort)
                 .usePlaintext()
-                .intercept()
                 .build();
         stub = TimecryptGrpc.newBlockingStub(channel);
         stub = MetadataUtils.attachHeaders(stub, header);

@@ -7,13 +7,15 @@ package ch.ethz.dsg.timecrypt.index.blockindex;
 
 import ch.ethz.dsg.timecrypt.index.blockindex.node.BlockNode;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 
 public class DebugBlockTreeManager implements IBlockTreeFetcher {
 
-    HashMap<String, BlockTree> treeMap = new HashMap<>();
+    Map<String, BlockTree> treeMap = Collections.synchronizedMap(new HashMap<>());
 
-    HashMap<String, BlockNode> blockMap = new HashMap<>();
+    Map<String, BlockNode> blockMap =  Collections.synchronizedMap(new HashMap<>());
 
     private static String deductKey(long uid, String user, long blockid) {
         return String.format("%d|%s|%d", uid, user, blockid);

@@ -29,4 +29,8 @@ public class TreeKeyRegressionFactory {
         return TreeKeyRegressionFactory.getNewKeyRegression(prf, new byte[16], depth, 2);
     }
 
+    public static SeedNode getSeedNode(int bitLen, long nodeNr, byte[] seed) {
+        return new TreeKeyRegressionNode(seed, bitLen, nodeNr);
+    }
+
 }

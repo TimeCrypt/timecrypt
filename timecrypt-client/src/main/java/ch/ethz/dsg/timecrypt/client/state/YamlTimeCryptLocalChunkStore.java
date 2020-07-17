@@ -26,6 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Implementation of the TimeCrypt local chunk store as a YAML file. The local chunk store should always only store one
@@ -42,6 +43,8 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
     private String path;
     private long lastWrittenChunkId;
 
+    private Object mutex = new Object();
+
     /**
      * The constructor for a new TimeCrypt local chunk store. WATCH OUT: You should only construct this once per stream
      * and from then on load the chunk store from disk!
@@ -56,7 +59,7 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
         this.lastWrittenChunkId = -1;
         this.unwrittenChunks = new TreeMap<>();
         if (path != null) {
-            synchronized (this) {
+            synchronized (mutex) {
                 mapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(path), this);
             }
         }
@@ -114,14 +117,16 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
 
     @Override
     public void setLastWrittenChunkId(long id) {
-        this.lastWrittenChunkId = id;
+        synchronized (mutex) {
+            this.lastWrittenChunkId = id;
+        }
     }
 
     @Override
     public void addUnwrittenChunk(EncryptedChunk chunk, EncryptedDigest digest) throws CouldNotStoreException,
             ChunkOutOfOrderException {
         long newChunkId = chunk.getChunkId();
-        synchronized (this) {
+        synchronized (mutex) {
             if (newChunkId <= lastWrittenChunkId) {
                 // chunk was already written
                 LOGGER.error("Can not store chunk for writing - its ID (" + newChunkId +
@@ -145,7 +150,7 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
 
     @Override
     public void markChunkAsWritten(long chunkId) throws ChunkOutOfOrderException, CouldNotStoreException {
-        synchronized (this) {
+        synchronized (mutex) {
             if (chunkId == (this.lastWrittenChunkId + 1)) {
                 this.unwrittenChunks.remove(chunkId);
                 this.lastWrittenChunkId++;
@@ -158,7 +163,7 @@ public class YamlTimeCryptLocalChunkStore implements TimeCryptLocalChunkStore {
 
     private void writeChunkStore() throws CouldNotStoreException {
         if (path != null) {
-            synchronized (this) {
+            synchronized (mutex) {
                 try {
                     mapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(path), this);
                 } catch (IOException e) {
