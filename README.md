@@ -1,6 +1,7 @@
 # TimeCrypt
 
 [![Build Status](https://travis-ci.org/TimeCrypt/timecrypt.svg?branch=master)](https://travis-ci.org/TimeCrypt/timecrypt)
+[![Java Maven Build](https://github.com/TimeCrypt/TimeCrypt/workflows/Java%20Maven%20Build/badge.svg)
 
 Implementation of TimeCrypt, see [the Paper](https://www.usenix.org/system/files/nsdi20-paper-burkhalter.pdf) for more details.
 TimeCrypt is an end-to-end encrypted time-series data store where the storage server does not see any data in the clear.
